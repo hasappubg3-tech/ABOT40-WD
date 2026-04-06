@@ -146,7 +146,7 @@ ICON = {"menu": "📂", "content": "📄"}
 
 def build_kb(uid, pid=None):
     btns = get_buttons(pid)
-    rows = [[KeyboardButton(f"{ICON.get(b['type'],'📄')} {b['label']}")] for b in btns]
+    rows = [[KeyboardButton(b['label'])] for b in btns]
     if pid is not None:
         rows.append([KeyboardButton(BTN_BACK)])
     if is_admin(uid):
@@ -164,7 +164,7 @@ def kb_manage(pid=None):
     rows = []
     for b in get_buttons(pid):
         rows.append([
-            InlineKeyboardButton(f"{ICON.get(b['type'],'📄')} {b['label']}", callback_data=f"e_{b['id']}"),
+            InlineKeyboardButton(b['label'], callback_data=f"e_{b['id']}"),
             InlineKeyboardButton("⬆️", callback_data=f"u_{b['id']}"),
             InlineKeyboardButton("⬇️", callback_data=f"d_{b['id']}"),
             InlineKeyboardButton("🗑", callback_data=f"x_{b['id']}"),
@@ -391,7 +391,7 @@ async def on_message(update: Update, ctx):
     # ── ضغط زر من القائمة ─────────────────────────────────────────
     btns = get_buttons(pid)
     matched = next((b for b in btns
-                    if f"{ICON.get(b['type'],'📄')} {b['label']}" == text), None)
+                    if b['label'] == text), None)
     if not matched:
         return
 
