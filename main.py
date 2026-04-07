@@ -19,7 +19,7 @@ DB = "data.db"
 # ── إعداد Gemini ──────────────────────────────────────────────────
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    _gemini_model = genai.GenerativeModel("gemini-1.5-flash")
+    _gemini_model = genai.GenerativeModel("gemini-pro")
 else:
     _gemini_model = None
 
