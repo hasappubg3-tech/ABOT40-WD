@@ -628,6 +628,17 @@ def kb_manage(pid=None):
         rows.append([InlineKeyboardButton("رجوع", callback_data="m_r" if back is None else f"m_{back}")])
     return InlineKeyboardMarkup(rows)
 
+def kb_add_position(after_bid):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("➡️ بجانبه (نفس السطر)", callback_data=f"pladd_same_{after_bid}"),
+        ],
+        [
+            InlineKeyboardButton("⬇️ تحته (سطر جديد)",   callback_data=f"pladd_new_{after_bid}"),
+        ],
+        [InlineKeyboardButton("❌ إلغاء", callback_data="pt_cancel")],
+    ])
+
 def kb_add_type():
     return InlineKeyboardMarkup([[
         InlineKeyboardButton("📂 قائمة", callback_data="pt_m"),
@@ -1005,13 +1016,15 @@ async def on_message(update: Update, ctx):
         if not text or text in SPECIAL_BTNS:
             await m.reply_text("⚠️ أرسل نصاً صحيحاً للاسم."); return
         t = ctx.user_data.get("new_type"); add_pid = ctx.user_data.get("add_pid")
-        add_after = ctx.user_data.get("add_after", "END")
+        add_after  = ctx.user_data.get("add_after", "END")
+        add_new_row = ctx.user_data.get("add_new_row", 0)
         if add_after != "END":
-            bid = add_btn_after(add_after, add_pid, t, text, new_row=0)
+            bid = add_btn_after(add_after, add_pid, t, text, new_row=add_new_row)
         else:
             bid = add_btn(add_pid, t, text)
         ctx.user_data.pop("state", None); ctx.user_data.pop("new_type", None)
         ctx.user_data.pop("add_after", None); ctx.user_data.pop("add_pid", None)
+        ctx.user_data.pop("add_new_row", None)
         ctx.user_data["pid"] = add_pid
         await m.reply_text(f"✅ تم إنشاء *{text}*", parse_mode="Markdown",
                            reply_markup=build_kb(uid, add_pid))
@@ -1920,11 +1933,24 @@ async def cb_manage(update: Update, ctx):
         ctx.user_data.pop("add_after", None)
         await q.edit_message_text("اختر نوع الزر الجديد:", reply_markup=kb_add_type()); return
 
+    if d.startswith("pladd_same_"):
+        after_bid = int(d[11:]); b = get_btn(after_bid)
+        ctx.user_data["add_pid"]   = b["parent_id"] if b else None
+        ctx.user_data["add_after"] = after_bid
+        ctx.user_data["add_new_row"] = 0
+        await q.edit_message_text("اختر نوع الزر الجديد:", reply_markup=kb_add_type()); return
+
+    if d.startswith("pladd_new_"):
+        after_bid = int(d[10:]); b = get_btn(after_bid)
+        ctx.user_data["add_pid"]   = b["parent_id"] if b else None
+        ctx.user_data["add_after"] = after_bid
+        ctx.user_data["add_new_row"] = 1
+        await q.edit_message_text("اختر نوع الزر الجديد:", reply_markup=kb_add_type()); return
+
     if d.startswith("plus_"):
         after_bid = int(d[5:]); b = get_btn(after_bid)
         ctx.user_data["add_pid"] = b["parent_id"] if b else None
-        ctx.user_data["add_after"] = after_bid
-        await q.edit_message_text("اختر نوع الزر الجديد:", reply_markup=kb_add_type()); return
+        await q.edit_message_text("أين تريد إضافة الزر الجديد؟", reply_markup=kb_add_position(after_bid)); return
 
     if d in ("pt_m", "pt_c"):
         t = "menu" if d == "pt_m" else "content"
