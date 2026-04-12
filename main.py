@@ -1435,6 +1435,14 @@ def kb_add_content_active(bid: int):
         InlineKeyboardButton("✅ انتهاء الإضافة", callback_data=f"ci_add_done_{bid}")
     ]])
 
+async def clear_add_content_control(ctx, chat_id):
+    msg_id = ctx.user_data.pop("add_content_control_msg_id", None)
+    if msg_id:
+        try:
+            await ctx.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+        except Exception:
+            pass
+
 def kb_confirm_delete(bid):
     b = get_btn(bid)
     pid = b["parent_id"] if b else None
@@ -1597,6 +1605,7 @@ async def on_message(update: Update, ctx):
         if m.text and is_bot_button_text(text, pid):
             ctx.user_data.pop("state", None)
             ctx.user_data.pop("item_bid", None)
+            await clear_add_content_control(ctx, chat_id)
             state = None
             await m.reply_text("✅ تم إنهاء إضافة المحتوى.", reply_markup=build_kb(uid, pid))
         else:
@@ -1613,12 +1622,14 @@ async def on_message(update: Update, ctx):
             await set_panel(ctx, chat_id,
                             f"📄 *{b['label']}*\n_{len(items)} عنصر_",
                             kb_content_panel(bid))
-            await m.reply_text(
+            await clear_add_content_control(ctx, chat_id)
+            control_msg = await m.reply_text(
                 f"✅ تمت الإضافة. العدد الحالي: *{len(items)}*\n\n"
                 "أرسل محتوى آخر، أو اضغط ✅ انتهاء الإضافة.",
                 parse_mode="Markdown",
-                reply_markup=build_kb(uid, pid)
+                reply_markup=kb_add_content_active(bid)
             )
+            ctx.user_data["add_content_control_msg_id"] = control_msg.message_id
             return
 
     # ── انتظار وصف جديد لعنصر محتوى ─────────────────────────────
@@ -3102,11 +3113,25 @@ async def cb_manage(update: Update, ctx):
         await q.edit_message_text(f"✏️ الاسم الحالي: *{b['label']}*\n\nاكتب الاسم الجديد:",
                                   parse_mode="Markdown", reply_markup=kb_cancel_inline()); return
 
+    if d.startswith("ci_add_done_"):
+        bid = int(d[len("ci_add_done_"):])
+        ctx.user_data.pop("state", None)
+        ctx.user_data.pop("item_bid", None)
+        ctx.user_data.pop("add_content_control_msg_id", None)
+        b = get_btn(bid)
+        items = get_items(bid)
+        await q.edit_message_text(
+            f"✅ تم إنهاء الإضافة.\n\n📄 *{b['label'] if b else 'المحتوى'}*\n_{len(items)} عنصر_",
+            parse_mode="Markdown",
+            reply_markup=kb_content_panel(bid)
+        ); return
+
     # ── لوحة محتوى الزر: إضافة عنصر ─────────────────────────────
     if d.startswith("ci_add_"):
         bid = int(d[7:])
         ctx.user_data["state"] = "wait_item_content"
         ctx.user_data["item_bid"] = bid
+        ctx.user_data["add_content_control_msg_id"] = q.message.message_id
         await q.edit_message_text(
             "📤 *إضافة محتوى متعددة*\n\n"
             "أرسل المحتوى الآن: نص، صورة، ملف، فيديو، أو صوت.\n"
@@ -3114,18 +3139,6 @@ async def cb_manage(update: Update, ctx):
             "_إذا ضغطت أي زر آخر من أزرار البوت تنتهي الإضافة تلقائياً._",
             parse_mode="Markdown",
             reply_markup=kb_add_content_active(bid)
-        ); return
-
-    if d.startswith("ci_add_done_"):
-        bid = int(d[len("ci_add_done_"):])
-        ctx.user_data.pop("state", None)
-        ctx.user_data.pop("item_bid", None)
-        b = get_btn(bid)
-        items = get_items(bid)
-        await q.edit_message_text(
-            f"✅ تم إنهاء الإضافة.\n\n📄 *{b['label'] if b else 'المحتوى'}*\n_{len(items)} عنصر_",
-            parse_mode="Markdown",
-            reply_markup=kb_content_panel(bid)
         ); return
 
     # ── عرض عناصر الزر مع أزرار إدارة لكل عنصر ──────────────────
