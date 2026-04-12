@@ -561,6 +561,12 @@ def all_menu_levels() -> list:
         "SELECT id, label, parent_id FROM buttons WHERE type='menu' ORDER BY ord, id"
     ).fetchall()]
 
+def get_all_special_btns() -> list:
+    """يُرجع قائمة بجميع الأزرار المميزة."""
+    return [dict(r) for r in db().execute(
+        "SELECT * FROM buttons WHERE type='special' ORDER BY ord, id"
+    ).fetchall()]
+
 
 def swap_btns(bid1, bid2):
     """يبدّل موضع زرين (ord + new_row)."""
@@ -688,11 +694,13 @@ async def send_file_item(target, item, reply_markup=None, extra_caption=""):
     await _send_from_local()
 
 # ── بناء لوحة مفاتيح الرد ────────────────────────────────────────
-ICON = {"menu": "📂", "content": "📄"}
+ICON = {"menu": "📂", "content": "📄", "special": "⭐"}
 
 def build_kb(uid, pid=None):
     btns = get_buttons(pid)
     admin = is_admin(uid)
+    if not admin:
+        btns = [b for b in btns if b.get("type") != "special"]
     rows = []
     current_row = []
     last_bid_in_row = None
@@ -758,11 +766,18 @@ def kb_add_where(pid):
     ])
 
 def kb_add_type():
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("📂 قائمة", callback_data="pt_m"),
-        InlineKeyboardButton("📄 محتوى", callback_data="pt_c"),
-        InlineKeyboardButton("❌ إلغاء", callback_data="pt_cancel"),
-    ]])
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("📂 قائمة", callback_data="pt_m"),
+            InlineKeyboardButton("📄 محتوى", callback_data="pt_c"),
+        ],
+        [
+            InlineKeyboardButton("⭐ مميز (للمشرفين فقط)", callback_data="pt_s"),
+        ],
+        [
+            InlineKeyboardButton("❌ إلغاء", callback_data="pt_cancel"),
+        ],
+    ])
 
 def kb_swap_select(pid=None, first_bid=None):
     """لوحة اختيار الزر للتبديل — بنفس تخطيط الأزرار الأصلي."""
@@ -891,7 +906,7 @@ def kb_settings():
         [InlineKeyboardButton("🔥 الملفات الترند",                callback_data="st_trending_0")],
         [InlineKeyboardButton("📡 الإذاعة",                       callback_data="st_broadcast")],
         [InlineKeyboardButton("💬 العبارات التحفيزية",             callback_data="st_phrases")],
-        [InlineKeyboardButton("⭐ الزر الخاص",                     callback_data="st_special")],
+        [InlineKeyboardButton("⭐ الأزرار المميزة",                callback_data="st_specials")],
     ])
 
 def kb_notif1_settings():
@@ -951,24 +966,40 @@ def kb_phrases():
     rows.append([InlineKeyboardButton("رجوع",                       callback_data="st_back")])
     return InlineKeyboardMarkup(rows)
 
-def kb_special_settings():
-    sp = get_special_btn()
+def kb_specials_list():
+    """قائمة بجميع الأزرار المميزة في الإعدادات."""
+    sp_btns = get_all_special_btns()
     rows = []
-    if sp:
-        rows.append([InlineKeyboardButton(f"✏️ تغيير الاسم: «{sp['label']}»", callback_data="st_special_rename")])
-        rows.append([InlineKeyboardButton("🔀 تغيير الموضع",                  callback_data="st_special_move")])
-        rows.append([InlineKeyboardButton("🗑 حذف الزر الخاص",               callback_data="st_special_del")])
-    else:
-        rows.append([InlineKeyboardButton("➕ إنشاء الزر الخاص",             callback_data="st_special_create")])
+    for sp in sp_btns:
+        pid_info = "الرئيسية" if sp.get("parent_id") is None else (
+            (get_btn(sp["parent_id"]) or {}).get("label", "—"))
+        rows.append([InlineKeyboardButton(
+            f"⭐ {sp['label']} (#{sp['id']}) — {pid_info}",
+            callback_data=f"st_special_view_{sp['id']}"
+        )])
+    if not sp_btns:
+        rows.append([InlineKeyboardButton("لا توجد أزرار مميزة بعد", callback_data="noop")])
     rows.append([InlineKeyboardButton("رجوع", callback_data="st_back")])
     return InlineKeyboardMarkup(rows)
 
-def kb_special_move_picker():
-    """لوحة اختيار وجهة نقل الزر الخاص (مستوى جديد)."""
-    rows = [[InlineKeyboardButton("📌 القائمة الرئيسية", callback_data="st_special_moveto_root")]]
-    for m in all_menu_levels():
-        rows.append([InlineKeyboardButton(f"📂 {m['label']}", callback_data=f"st_special_moveto_{m['id']}")])
-    rows.append([InlineKeyboardButton("❌ إلغاء", callback_data="st_special")])
+def kb_special_manage(bid):
+    """لوحة إدارة زر مميز واحد من الإعدادات."""
+    b = get_btn(bid)
+    if not b:
+        return InlineKeyboardMarkup([[InlineKeyboardButton("رجوع", callback_data="st_specials")]])
+    items = get_items(bid)
+    rows = []
+    if items:
+        rows.append([InlineKeyboardButton("👁 عرض المحتوى", callback_data=f"ci_view_{bid}")])
+    rows.append([InlineKeyboardButton("➕ إضافة محتوى", callback_data=f"ci_add_{bid}")])
+    global_cap = get_global_caption()
+    if global_cap:
+        no_cap = (b.get("no_caption", 0) or 0)
+        cap_label = "✅ تفعيل كليشة الكلام" if no_cap else "🚫 إلغاء كليشة الكلام"
+        rows.append([InlineKeyboardButton(cap_label, callback_data=f"ci_toggle_cap_{bid}")])
+    rows.append([InlineKeyboardButton("✏️ تغيير الاسم", callback_data=f"el_{bid}")])
+    rows.append([InlineKeyboardButton("🗑 حذف الزر",    callback_data=f"confirm_x_{bid}")])
+    rows.append([InlineKeyboardButton("رجوع", callback_data="st_specials")])
     return InlineKeyboardMarkup(rows)
 
 def kb_caption_settings():
@@ -1285,6 +1316,10 @@ async def on_message(update: Update, ctx):
             await set_panel(ctx, chat_id,
                             f"📄 *{text}*\n\nلا يوجد محتوى بعد. اضغط ➕ لإضافة محتوى.",
                             kb_content_panel(bid))
+        elif t == "special":
+            await set_panel(ctx, chat_id,
+                            f"⭐ *{text}* — مميز للمشرفين فقط\nرقم الزر: `{bid}`\n\nلا يوجد محتوى بعد.",
+                            kb_content_panel(bid))
         return
 
     # ── انتظار محتوى جديد لزر موجود ──────────────────────────────
@@ -1482,22 +1517,6 @@ async def on_message(update: Update, ctx):
         await m.reply_text("✅", reply_markup=build_kb(uid, pid))
         return
 
-    # ── انتظار اسم الزر الخاص (إنشاء أو تغيير) ──────────────────────
-    if state == "wait_special_name":
-        if not m.text or m.text in SPECIAL_BTNS:
-            await m.reply_text("⚠️ أرسل نصاً صحيحاً للاسم."); return
-        sp = get_special_btn()
-        if sp:
-            upd_btn_label(sp["id"], m.text.strip())
-            msg = f"✅ تم تغيير اسم الزر الخاص إلى «{m.text.strip()}»"
-        else:
-            create_special_btn(m.text.strip())
-            msg = f"✅ تم إنشاء الزر الخاص «{m.text.strip()}» في القائمة الرئيسية"
-        ctx.user_data.pop("state", None)
-        await set_panel(ctx, chat_id, f"{msg}\n\n⭐ *الزر الخاص*", kb_special_settings())
-        await m.reply_text("✅", reply_markup=build_kb(uid, pid))
-        return
-
     # ── انتظار نسبة العبارات التحفيزية ──────────────────────────────
     if state == "wait_phrases_chance":
         try:
@@ -1677,10 +1696,13 @@ async def on_message(update: Update, ctx):
             return
         ctx.user_data["quick_add_lines"] = lines
         ctx.user_data["quick_add_pid"] = pid
-        markup = InlineKeyboardMarkup([[
-            InlineKeyboardButton("📂 قائمة", callback_data="qa_menu"),
-            InlineKeyboardButton("📄 محتوى", callback_data="qa_content"),
-        ]])
+        markup = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("📂 قائمة", callback_data="qa_menu"),
+                InlineKeyboardButton("📄 محتوى", callback_data="qa_content"),
+            ],
+            [InlineKeyboardButton("⭐ مميز (للمشرفين فقط)", callback_data="qa_special")],
+        ])
         preview = "\n".join(
             " | ".join(p.strip() for p in l.split("|") if p.strip()) for l in lines
         )
@@ -1798,8 +1820,10 @@ async def on_message(update: Update, ctx):
 
     elif b["type"] == "special":
         if is_admin(uid):
-            await set_panel(ctx, chat_id, f"⭐ *الزر الخاص — {b['label']}*", kb_special_settings())
-        # سلوك المستخدم سيُحدَّد لاحقاً
+            items = get_items(b["id"])
+            await set_panel(ctx, chat_id,
+                            f"⭐ *{b['label']}* — مميز (#{b['id']})\n_{len(items)} عنصر_",
+                            kb_content_quick(b["id"]))
 
 # ── معالج أزرار Inline ────────────────────────────────────────────
 async def cb_manage(update: Update, ctx):
@@ -2042,91 +2066,28 @@ async def cb_manage(update: Update, ctx):
         )
         return
 
-    # ── الزر الخاص ───────────────────────────────────────────────────
-    if d == "st_special":
-        sp = get_special_btn()
-        if sp:
-            pid_info = "القائمة الرئيسية" if sp.get("parent_id") is None else (
-                (get_btn(sp["parent_id"]) or {}).get("label", "—"))
-            header = f"⭐ *الزر الخاص*\n\nالاسم الحالي: *{sp['label']}*\nالموضع: _{pid_info}_"
-        else:
-            header = "⭐ *الزر الخاص*\n\nلا يوجد زر خاص بعد."
-        await q.edit_message_text(header, parse_mode="Markdown", reply_markup=kb_special_settings())
+    # ── الأزرار المميزة ───────────────────────────────────────────────
+    if d == "st_specials":
+        sp_btns = get_all_special_btns()
+        count = len(sp_btns)
+        txt = (f"⭐ *الأزرار المميزة* — {count} زر\n\nهذه الأزرار تظهر فقط للمشرفين.\n"
+               "لإنشاء زر مميز جديد: اضغط ➕ إضافة في الكيبورد واختر ⭐ مميز.")
+        await q.edit_message_text(txt, parse_mode="Markdown", reply_markup=kb_specials_list())
         return
 
-    if d == "st_special_create":
-        if get_special_btn():
-            await q.answer("⚠️ يوجد زر خاص بالفعل.", show_alert=True); return
-        ctx.user_data["state"] = "wait_special_name"
+    if d.startswith("st_special_view_"):
+        bid = int(d[len("st_special_view_"):])
+        b = get_btn(bid)
+        if not b:
+            await q.answer("⚠️ الزر غير موجود.", show_alert=True); return
+        pid_info = "القائمة الرئيسية" if b.get("parent_id") is None else (
+            (get_btn(b["parent_id"]) or {}).get("label", "—"))
+        items = get_items(bid)
         await q.edit_message_text(
-            "⭐ أرسل اسم الزر الخاص الجديد:",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء", callback_data="st_special")]])
-        )
-        return
-
-    if d == "st_special_rename":
-        sp = get_special_btn()
-        if not sp:
-            await q.answer("⚠️ لا يوجد زر خاص.", show_alert=True); return
-        ctx.user_data["state"] = "wait_special_name"
-        await q.edit_message_text(
-            f"✏️ الاسم الحالي: *{sp['label']}*\n\nأرسل الاسم الجديد للزر الخاص:",
+            f"⭐ *{b['label']}*\nالرقم: `{bid}` | الموضع: _{pid_info}_\n_{len(items)} عنصر_",
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء", callback_data="st_special")]])
+            reply_markup=kb_special_manage(bid)
         )
-        return
-
-    if d == "st_special_move":
-        sp = get_special_btn()
-        if not sp:
-            await q.answer("⚠️ لا يوجد زر خاص.", show_alert=True); return
-        await q.edit_message_text(
-            "🔀 *اختر المستوى الذي تريد نقل الزر الخاص إليه:*\n_(سيُضاف في نهاية المستوى المختار)_",
-            parse_mode="Markdown",
-            reply_markup=kb_special_move_picker()
-        )
-        return
-
-    if d.startswith("st_special_moveto_"):
-        sp = get_special_btn()
-        if not sp:
-            await q.answer("⚠️ لا يوجد زر خاص.", show_alert=True); return
-        dest = d[len("st_special_moveto_"):]
-        new_pid = None if dest == "root" else int(dest)
-        if new_pid == sp["id"]:
-            await q.answer("⚠️ لا يمكن نقل الزر داخل نفسه.", show_alert=True); return
-        move_special_btn(sp["id"], new_pid)
-        dest_name = "القائمة الرئيسية" if new_pid is None else (
-            (get_btn(new_pid) or {}).get("label", "—"))
-        await q.edit_message_text(
-            f"✅ تم نقل الزر الخاص *{sp['label']}* إلى: _{dest_name}_",
-            parse_mode="Markdown",
-            reply_markup=kb_special_settings()
-        )
-        # نُحدِّث الكيبورد ليعكس الوضع الجديد عند المستوى الحالي
-        cur_pid = ctx.user_data.get("pid")
-        await q.message.reply_text("🔄", reply_markup=build_kb(uid, cur_pid))
-        return
-
-    if d == "st_special_del":
-        sp = get_special_btn()
-        if not sp:
-            await q.answer("⚠️ لا يوجد زر خاص.", show_alert=True); return
-        await q.edit_message_text(
-            f"⚠️ هل تريد حذف الزر الخاص *{sp['label']}* نهائياً؟",
-            parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🗑 نعم، احذفه", callback_data="st_special_del_confirm"),
-                InlineKeyboardButton("❌ إلغاء",       callback_data="st_special"),
-            ]])
-        )
-        return
-
-    if d == "st_special_del_confirm":
-        sp = get_special_btn()
-        if sp:
-            del_btn(sp["id"])
-        await q.edit_message_text("✅ تم حذف الزر الخاص.", reply_markup=kb_special_settings())
         return
 
     if d == "st_caption":
@@ -2320,8 +2281,8 @@ async def cb_manage(update: Update, ctx):
         return
 
     # ── إضافة سريعة (اضف) ─────────────────────────────────────────
-    if d in ("qa_menu", "qa_content"):
-        btn_type = "menu" if d == "qa_menu" else "content"
+    if d in ("qa_menu", "qa_content", "qa_special"):
+        btn_type = "menu" if d == "qa_menu" else ("content" if d == "qa_content" else "special")
         lines = ctx.user_data.pop("quick_add_lines", [])
         qa_pid = ctx.user_data.pop("quick_add_pid", pid)
         if not lines:
@@ -2349,7 +2310,7 @@ async def cb_manage(update: Update, ctx):
             names = "\n".join(
                 f"  {'🔹' if nr else '  ▪️'} {lbl}" for lbl, nr in all_added
             )
-            type_label = "📂 قائمة" if btn_type == "menu" else "📄 محتوى"
+            type_label = "📂 قائمة" if btn_type == "menu" else ("📄 محتوى" if btn_type == "content" else "⭐ مميز")
             await q.edit_message_text(
                 f"✅ تم إضافة {len(all_added)} زر ({type_label}):\n{names}",
                 parse_mode="Markdown"
@@ -2366,9 +2327,11 @@ async def cb_manage(update: Update, ctx):
 
     if d.startswith("m_"):
         ep = int(d[2:]); b = get_btn(ep)
-        if b and b["type"] == "content":
+        if b and b["type"] in ("content", "special"):
             items = get_items(ep)
-            await q.edit_message_text(f"📄 *{b['label']}*\n_{len(items)} عنصر_",
+            prefix = "⭐" if b["type"] == "special" else "📄"
+            extra = f" (#{ep})" if b["type"] == "special" else ""
+            await q.edit_message_text(f"{prefix} *{b['label']}*{extra}\n_{len(items)} عنصر_",
                                       parse_mode="Markdown", reply_markup=kb_content_panel(ep))
         else:
             await q.edit_message_text(f"📂 *{b['label']}*" if b else "⚙️ *إدارة الأزرار*:",
@@ -2382,6 +2345,10 @@ async def cb_manage(update: Update, ctx):
         if b["type"] == "content":
             items = get_items(bid)
             await q.edit_message_text(f"📄 *{b['label']}*\n_{len(items)} عنصر_",
+                                      parse_mode="Markdown", reply_markup=kb_content_panel(bid))
+        elif b["type"] == "special":
+            items = get_items(bid)
+            await q.edit_message_text(f"⭐ *{b['label']}* (#{bid})\n_{len(items)} عنصر_",
                                       parse_mode="Markdown", reply_markup=kb_content_panel(bid))
         else:
             await q.edit_message_text(f"📂 *{b['label']}*", parse_mode="Markdown",
@@ -2480,8 +2447,8 @@ async def cb_manage(update: Update, ctx):
         ctx.user_data["add_pid"] = b["parent_id"] if b else None
         await q.edit_message_text("أين تريد إضافة الزر الجديد؟", reply_markup=kb_add_position(after_bid)); return
 
-    if d in ("pt_m", "pt_c"):
-        t = "menu" if d == "pt_m" else "content"
+    if d in ("pt_m", "pt_c", "pt_s"):
+        t = "menu" if d == "pt_m" else ("content" if d == "pt_c" else "special")
         ctx.user_data["new_type"] = t
         ctx.user_data["state"] = "wait_label"
         await q.edit_message_text("✏️ اكتب اسم الزر الجديد:", reply_markup=kb_cancel_inline()); return
