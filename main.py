@@ -452,6 +452,18 @@ def add_btn(pid, t, label):
                 (pid, t, label, len(ids) + 1))
     lid = cur.lastrowid; c.commit(); c.close(); return lid
 
+def add_btn_before(before_bid, pid, t, label):
+    """يضيف زراً في صف جديد قبل before_bid مباشرة."""
+    c = db(); cur = c.cursor()
+    ids = _siblings(cur, pid)
+    pos = ids.index(before_bid) if before_bid in ids else 0
+    cur.execute("INSERT INTO buttons(parent_id,type,label,ord,new_row) VALUES(?,?,?,?,?)",
+                (pid, t, label, 0, 1))
+    new_id = cur.lastrowid
+    ids.insert(pos, new_id)
+    _renumber(cur, ids)
+    c.commit(); c.close(); return new_id
+
 def add_btn_after(after_bid, pid, t, label, new_row=1):
     """يضيف زراً بعد after_bid، أو في البداية إذا كان after_bid=None."""
     c = db(); cur = c.cursor()
@@ -728,12 +740,20 @@ def kb_manage(pid=None):
 
 def kb_add_position(after_bid):
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("➡️ بجانبه (نفس السطر)", callback_data=f"pladd_same_{after_bid}"),
-        ],
-        [
-            InlineKeyboardButton("⬇️ تحته (سطر جديد)",   callback_data=f"pladd_new_{after_bid}"),
-        ],
+        [InlineKeyboardButton("⬆️ فوقه (صف جديد)",      callback_data=f"pladd_above_{after_bid}")],
+        [InlineKeyboardButton("➡️ بجانبه (نفس السطر)",  callback_data=f"pladd_same_{after_bid}")],
+        [InlineKeyboardButton("⬇️ تحته (سطر جديد)",     callback_data=f"pladd_new_{after_bid}")],
+        [InlineKeyboardButton("❌ إلغاء",                callback_data="pt_cancel")],
+    ])
+
+def kb_add_where(pid):
+    """يُعرض عند BTN_ADD ليختار المشرف الموضع أولاً."""
+    btns = get_buttons(pid)
+    if not btns:
+        return None  # لا حاجة للسؤال إذا لم تكن هناك أزرار
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬆️ في أعلى القائمة (صف جديد أول)", callback_data="pt_addtop")],
+        [InlineKeyboardButton("⬇️ في أسفل القائمة (نهاية القائمة)", callback_data="pt_addbottom")],
         [InlineKeyboardButton("❌ إلغاء", callback_data="pt_cancel")],
     ])
 
@@ -1246,15 +1266,18 @@ async def on_message(update: Update, ctx):
         if not text or text in SPECIAL_BTNS:
             await m.reply_text("⚠️ أرسل نصاً صحيحاً للاسم."); return
         t = ctx.user_data.get("new_type"); add_pid = ctx.user_data.get("add_pid")
-        add_after  = ctx.user_data.get("add_after", "END")
+        add_after   = ctx.user_data.get("add_after", "END")
         add_new_row = ctx.user_data.get("add_new_row", 0)
-        if add_after != "END":
+        add_before  = ctx.user_data.get("add_before")
+        if add_before is not None:
+            bid = add_btn_before(add_before, add_pid, t, text)
+        elif add_after != "END":
             bid = add_btn_after(add_after, add_pid, t, text, new_row=add_new_row)
         else:
             bid = add_btn(add_pid, t, text)
         ctx.user_data.pop("state", None); ctx.user_data.pop("new_type", None)
         ctx.user_data.pop("add_after", None); ctx.user_data.pop("add_pid", None)
-        ctx.user_data.pop("add_new_row", None)
+        ctx.user_data.pop("add_new_row", None); ctx.user_data.pop("add_before", None)
         ctx.user_data["pid"] = add_pid
         await m.reply_text(f"✅ تم إنشاء *{text}*", parse_mode="Markdown",
                            reply_markup=build_kb(uid, add_pid))
@@ -1715,7 +1738,12 @@ async def on_message(update: Update, ctx):
             ctx.user_data["add_pid"] = pid
             ctx.user_data.pop("add_after", None)
             ctx.user_data.pop("add_new_row", None)
-            await set_panel(ctx, chat_id, "اختر نوع الزر الجديد:", kb_add_type())
+            ctx.user_data.pop("add_before", None)
+            where_kb = kb_add_where(pid)
+            if where_kb:
+                await set_panel(ctx, chat_id, "⬆️⬇️ أين تريد إضافة الزر الجديد؟", where_kb)
+            else:
+                await set_panel(ctx, chat_id, "اختر نوع الزر الجديد:", kb_add_type())
             return
         if text.startswith(BTN_PLUS):
             after_bid = _parse_plus(text)
@@ -2408,11 +2436,20 @@ async def cb_manage(update: Update, ctx):
         ctx.user_data.pop("add_after", None)
         await q.edit_message_text("اختر نوع الزر الجديد:", reply_markup=kb_add_type()); return
 
+    if d.startswith("pladd_above_"):
+        before_bid = int(d[12:]); b = get_btn(before_bid)
+        ctx.user_data["add_pid"]    = b["parent_id"] if b else None
+        ctx.user_data["add_before"] = before_bid
+        ctx.user_data.pop("add_after", None)
+        ctx.user_data.pop("add_new_row", None)
+        await q.edit_message_text("اختر نوع الزر الجديد:", reply_markup=kb_add_type()); return
+
     if d.startswith("pladd_same_"):
         after_bid = int(d[11:]); b = get_btn(after_bid)
         ctx.user_data["add_pid"]   = b["parent_id"] if b else None
         ctx.user_data["add_after"] = after_bid
         ctx.user_data["add_new_row"] = 0
+        ctx.user_data.pop("add_before", None)
         await q.edit_message_text("اختر نوع الزر الجديد:", reply_markup=kb_add_type()); return
 
     if d.startswith("pladd_new_"):
@@ -2420,6 +2457,20 @@ async def cb_manage(update: Update, ctx):
         ctx.user_data["add_pid"]   = b["parent_id"] if b else None
         ctx.user_data["add_after"] = after_bid
         ctx.user_data["add_new_row"] = 1
+        ctx.user_data.pop("add_before", None)
+        await q.edit_message_text("اختر نوع الزر الجديد:", reply_markup=kb_add_type()); return
+
+    if d == "pt_addtop":
+        # إضافة في الأعلى: نستخدم add_after=None لإدراجه قبل الأول
+        ctx.user_data["add_after"]   = None
+        ctx.user_data["add_new_row"] = 1
+        ctx.user_data.pop("add_before", None)
+        await q.edit_message_text("اختر نوع الزر الجديد:", reply_markup=kb_add_type()); return
+
+    if d == "pt_addbottom":
+        ctx.user_data.pop("add_after", None)
+        ctx.user_data.pop("add_new_row", None)
+        ctx.user_data.pop("add_before", None)
         await q.edit_message_text("اختر نوع الزر الجديد:", reply_markup=kb_add_type()); return
 
     if d.startswith("plus_"):
@@ -2436,7 +2487,7 @@ async def cb_manage(update: Update, ctx):
     if d == "pt_cancel":
         ctx.user_data.pop("state", None); ctx.user_data.pop("new_type", None)
         ctx.user_data.pop("add_after", None); ctx.user_data.pop("add_pid", None)
-        ctx.user_data.pop("add_new_row", None)
+        ctx.user_data.pop("add_new_row", None); ctx.user_data.pop("add_before", None)
         try:
             await q.message.delete()
         except Exception:
