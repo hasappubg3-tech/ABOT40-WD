@@ -3181,7 +3181,10 @@ async def cb_manage(update: Update, ctx):
     if d.startswith("ci_del_"):
         iid = int(d[7:])
         del_item(iid)
-        await q.edit_message_reply_markup(reply_markup=None)
+        try:
+            await q.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
         await q.answer("✅ تم الحذف.", show_alert=False); return
 
     # ── إدارة المشرفين ────────────────────────────────────────────
