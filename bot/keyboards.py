@@ -143,6 +143,7 @@ def kb_add_type():
         ],
         [
             InlineKeyboardButton("📊 كويز", callback_data="pt_q"),
+            InlineKeyboardButton("📝 امتحان", callback_data="pt_e"),
         ],
         [
             InlineKeyboardButton("⭐ مميز (للمشرفين فقط)", callback_data="pt_s"),
@@ -151,6 +152,63 @@ def kb_add_type():
             InlineKeyboardButton("❌ إلغاء", callback_data="pt_cancel"),
         ],
     ])
+
+def kb_exam_panel(bid):
+    b = get_btn(bid)
+    questions = get_exam_questions(bid)
+    random_e = (b.get("random_exam", 0) or 0) if b else 0
+    rows = []
+    if questions:
+        rows.append([InlineKeyboardButton(f"📋 الأسئلة ({len(questions)})", callback_data=f"ex_list_{bid}")])
+    rows.append([InlineKeyboardButton("➕ إضافة سؤال", callback_data=f"ex_add_{bid}")])
+    rand_label = "🔀 إلغاء التوزيع العشوائي" if random_e else "🔀 تفعيل التوزيع العشوائي"
+    rows.append([InlineKeyboardButton(rand_label, callback_data=f"ex_toggle_rand_{bid}")])
+    rows.append([InlineKeyboardButton("✏️ تغيير الاسم", callback_data=f"el_{bid}")])
+    rows.append([InlineKeyboardButton("🗑 حذف الزر", callback_data=f"confirm_x_{bid}")])
+    pid = b["parent_id"] if b else None
+    rows.append([InlineKeyboardButton("رجوع", callback_data="m_r" if pid is None else f"m_{pid}")])
+    return InlineKeyboardMarkup(rows)
+
+def kb_exam_quick(bid):
+    b = get_btn(bid)
+    questions = get_exam_questions(bid)
+    random_e = (b.get("random_exam", 0) or 0) if b else 0
+    rows = []
+    if questions:
+        rows.append([InlineKeyboardButton(f"📋 الأسئلة ({len(questions)})", callback_data=f"ex_list_{bid}")])
+    rows.append([InlineKeyboardButton("➕ إضافة سؤال", callback_data=f"ex_add_{bid}")])
+    rand_label = "🔀 إلغاء التوزيع العشوائي" if random_e else "🔀 تفعيل التوزيع العشوائي"
+    rows.append([InlineKeyboardButton(rand_label, callback_data=f"ex_toggle_rand_{bid}")])
+    rows.append([InlineKeyboardButton("✏️ تغيير الاسم", callback_data=f"el_{bid}")])
+    rows.append([InlineKeyboardButton("🗑 حذف", callback_data=f"confirm_x_{bid}")])
+    return InlineKeyboardMarkup(rows)
+
+def kb_exam_question_list(bid):
+    questions = get_exam_questions(bid)
+    rows = []
+    for i, q in enumerate(questions, start=1):
+        has_answer = bool(q.get("a_text") or q.get("a_file_id"))
+        status = "✅" if has_answer else "⚠️"
+        label = q.get("q_text") or f"سؤال {i} [{q.get('q_type','text')}]"
+        rows.append([InlineKeyboardButton(
+            f"{status} {label[:35]}", callback_data=f"ex_q_{q['id']}"
+        )])
+    rows.append([InlineKeyboardButton("➕ إضافة سؤال", callback_data=f"ex_add_{bid}")])
+    rows.append([InlineKeyboardButton("رجوع", callback_data=f"ex_panel_{bid}")])
+    return InlineKeyboardMarkup(rows)
+
+def kb_exam_question_manage(qid):
+    q = get_exam_question(qid)
+    if not q:
+        return InlineKeyboardMarkup([[InlineKeyboardButton("رجوع", callback_data="noop")]])
+    bid = q["button_id"]
+    rows = [
+        [InlineKeyboardButton("✏️ تعديل السؤال", callback_data=f"ex_edit_q_{qid}")],
+        [InlineKeyboardButton("✏️ تعديل الجواب", callback_data=f"ex_edit_a_{qid}")],
+        [InlineKeyboardButton("🗑 حذف السؤال", callback_data=f"ex_delq_{qid}")],
+        [InlineKeyboardButton("رجوع", callback_data=f"ex_list_{bid}")],
+    ]
+    return InlineKeyboardMarkup(rows)
 
 def kb_swap_select(pid=None, first_bid=None):
     """لوحة اختيار الزر للتبديل — بنفس تخطيط الأزرار الأصلي."""

@@ -349,6 +349,102 @@ async def send_quiz_question(m, bid, question, uid=None, random_q=0, ctx=None):
             ])
         )
 
+# ── جلسات الامتحانات ──────────────────────────────────────────────────────
+
+def _exam_session_key(bid):
+    return f"exam_sess_{bid}"
+
+def start_exam_session(ctx, uid, bid):
+    import random as _random
+    b = get_btn(bid)
+    random_e = (b.get("random_exam", 0) or 0) if b else 0
+    questions = get_exam_questions(bid)
+    q_ids = [q["id"] for q in questions]
+    if random_e:
+        _random.shuffle(q_ids)
+    session = {
+        "bid": bid,
+        "q_ids": q_ids,
+        "total": len(q_ids),
+        "finished": False,
+    }
+    ctx.user_data[_exam_session_key(bid)] = session
+    return session
+
+def get_exam_session(ctx, bid):
+    return ctx.user_data.get(_exam_session_key(bid))
+
+async def send_exam_ready(m, bid):
+    b = get_btn(bid)
+    title = b["label"] if b else "الامتحان"
+    questions = get_exam_questions(bid)
+    await m.reply_text(
+        f"📝 *{title}*\n\n_{len(questions)} سؤال_\n\nهل أنت مستعد لبدء الامتحان؟",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ نعم، مستعد!", callback_data=f"ex_start_{bid}")]
+        ])
+    )
+
+async def _send_exam_item(target, item_type, item_text, item_file_id, reply_markup=None, header=""):
+    kwargs = {}
+    if reply_markup:
+        kwargs["reply_markup"] = reply_markup
+    full_text = header + (item_text or "")
+    if item_type == "text":
+        await target.reply_text(full_text or "—", parse_mode="Markdown", **kwargs)
+    elif item_type == "photo":
+        await target.reply_photo(item_file_id, caption=full_text or None, parse_mode="Markdown", **kwargs)
+    elif item_type == "file":
+        await target.reply_document(item_file_id, caption=full_text or None, parse_mode="Markdown", **kwargs)
+
+async def send_exam_question_to_user(target, bid, qid, current_num, total):
+    q = get_exam_question(qid)
+    if not q:
+        await target.reply_text("⚠️ السؤال غير موجود.")
+        return
+    reveal_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👁 عرض الجواب", callback_data=f"ex_ans_{qid}_{bid}")]
+    ])
+    await _send_exam_item(
+        target,
+        q.get("q_type", "text"),
+        q.get("q_text"),
+        q.get("q_file_id"),
+        reply_markup=reveal_markup,
+        header=f"📝 *السؤال {current_num}/{total}*\n\n",
+    )
+
+async def send_exam_answer_to_user(target, bid, qid, current_idx, total):
+    q = get_exam_question(qid)
+    if not q:
+        await target.reply_text("⚠️ الجواب غير موجود.")
+        return
+    is_last = (current_idx + 1 >= total)
+    if is_last:
+        next_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🏁 إنهاء الامتحان", callback_data=f"ex_finish_{bid}")]
+        ])
+    else:
+        next_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("➡️ السؤال التالي", callback_data=f"ex_next_{bid}_{qid}")],
+            [InlineKeyboardButton("🏁 إنهاء الامتحان", callback_data=f"ex_finish_{bid}")],
+        ])
+    a_type = q.get("a_type", "text")
+    a_text = q.get("a_text")
+    a_file_id = q.get("a_file_id")
+    if not a_text and not a_file_id:
+        await target.reply_text("⚠️ لم يُضَف جواب لهذا السؤال بعد.", reply_markup=next_markup)
+        return
+    await _send_exam_item(
+        target,
+        a_type,
+        a_text,
+        a_file_id,
+        reply_markup=next_markup,
+        header="✅ *الجواب:*\n\n",
+    )
+
 async def on_poll_answer(update: Update, ctx):
     answer = update.poll_answer
     data = ctx.bot_data.get("quiz_poll_map", {}).get(answer.poll_id)

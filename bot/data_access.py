@@ -215,6 +215,24 @@ def init_db():
             );
         """)
         c.commit()
+        try:
+            c.execute("ALTER TABLE buttons ADD COLUMN random_exam INTEGER DEFAULT 0")
+            c.commit()
+        except Exception:
+            pass
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS exam_questions (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                button_id INTEGER NOT NULL REFERENCES buttons(id) ON DELETE CASCADE,
+                q_type    TEXT NOT NULL DEFAULT 'text',
+                q_text    TEXT,
+                q_file_id TEXT,
+                a_type    TEXT NOT NULL DEFAULT 'text',
+                a_text    TEXT,
+                a_file_id TEXT,
+                ord       INTEGER DEFAULT 0
+            );
+        """)
         c.execute("""
             CREATE TABLE IF NOT EXISTS button_ratings (
                 button_id INTEGER NOT NULL,
@@ -783,6 +801,48 @@ def build_trending_text(page: int, page_size: int = 10) -> tuple:
 
 def kb_cancel_inline():
     return InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء", callback_data="cancel")]])
+
+# ── امتحانات ───────────────────────────────────────────────────────────────
+
+def add_exam_question(bid, q_type, q_text, q_file_id):
+    with db() as c:
+        count = c.execute("SELECT COUNT(*) FROM exam_questions WHERE button_id=?", (bid,)).fetchone()[0]
+        cur = c.execute(
+            "INSERT INTO exam_questions(button_id,q_type,q_text,q_file_id,ord) VALUES(?,?,?,?,?)",
+            (bid, q_type, q_text, q_file_id, count + 1)
+        )
+        qid = cur.lastrowid
+    return qid
+
+def set_exam_answer(qid, a_type, a_text, a_file_id):
+    with db() as c:
+        c.execute(
+            "UPDATE exam_questions SET a_type=?, a_text=?, a_file_id=? WHERE id=?",
+            (a_type, a_text, a_file_id, qid)
+        )
+
+def get_exam_questions(bid):
+    return [dict(r) for r in db().execute(
+        "SELECT * FROM exam_questions WHERE button_id=? ORDER BY ord, id", (bid,)
+    ).fetchall()]
+
+def get_exam_question(qid):
+    r = db().execute("SELECT * FROM exam_questions WHERE id=?", (qid,)).fetchone()
+    return dict(r) if r else None
+
+def del_exam_question(qid):
+    with db() as c:
+        c.execute("DELETE FROM exam_questions WHERE id=?", (qid,))
+
+def toggle_random_exam(bid):
+    b = get_btn(bid)
+    if not b:
+        return False
+    current = b.get("random_exam", 0) or 0
+    new_val = 0 if current else 1
+    with db() as c:
+        c.execute("UPDATE buttons SET random_exam=? WHERE id=?", (new_val, bid))
+    return bool(new_val)
 
 def kb_add_content_active(bid: int):
     return InlineKeyboardMarkup([[

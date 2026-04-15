@@ -620,6 +620,78 @@ async def on_message(update: Update, ctx):
             await m.reply_text("❌ تعذر إرسال فاتورة النجوم حالياً. حاول مرة أخرى لاحقاً.")
         return
 
+    # ── انتظار سؤال امتحان ─────────────────────────────────────────
+    if state == "wait_exam_q":
+        bid = ctx.user_data.pop("exam_q_bid", None)
+        if not bid:
+            ctx.user_data.pop("state", None); return
+        q_type, q_text, q_file_id = detect_content(m)
+        if not q_type:
+            await m.reply_text("⚠️ أرسل نصاً أو صورة أو ملفاً."); return
+        qid = add_exam_question(bid, q_type, q_text, q_file_id)
+        ctx.user_data["state"] = "wait_exam_a"
+        ctx.user_data["exam_a_qid"] = qid
+        await m.reply_text(
+            "✅ تم حفظ السؤال.\n\nأرسل الجواب الآن (نص، صورة، أو ملف):",
+            reply_markup=kb_cancel_inline()
+        )
+        return
+
+    # ── انتظار جواب امتحان ─────────────────────────────────────────
+    if state == "wait_exam_a":
+        qid = ctx.user_data.pop("exam_a_qid", None)
+        q_obj = get_exam_question(qid) if qid else None
+        if not q_obj:
+            ctx.user_data.pop("state", None); return
+        a_type, a_text, a_file_id = detect_content(m)
+        if not a_type:
+            await m.reply_text("⚠️ أرسل نصاً أو صورة أو ملفاً.")
+            ctx.user_data["exam_a_qid"] = qid; return
+        set_exam_answer(qid, a_type, a_text, a_file_id)
+        ctx.user_data.pop("state", None)
+        bid = q_obj["button_id"]
+        questions = get_exam_questions(bid)
+        b_obj = get_btn(bid)
+        await set_panel(ctx, chat_id,
+                        f"📝 *{b_obj['label'] if b_obj else 'امتحان'}*\n_{len(questions)} سؤال_",
+                        kb_exam_panel(bid))
+        await m.reply_text("✅ تم إضافة السؤال والجواب بنجاح!", reply_markup=build_kb(uid, pid))
+        return
+
+    # ── انتظار تعديل سؤال امتحان ───────────────────────────────────
+    if state == "wait_exam_edit_q":
+        qid = ctx.user_data.pop("exam_edit_qid", None)
+        if not qid:
+            ctx.user_data.pop("state", None); return
+        q_type, q_text, q_file_id = detect_content(m)
+        if not q_type:
+            await m.reply_text("⚠️ أرسل نصاً أو صورة أو ملفاً.")
+            ctx.user_data["exam_edit_qid"] = qid; return
+        with db() as _c:
+            _c.execute("UPDATE exam_questions SET q_type=?, q_text=?, q_file_id=? WHERE id=?",
+                       (q_type, q_text, q_file_id, qid))
+        ctx.user_data.pop("state", None)
+        await m.reply_text("✅ تم تعديل السؤال.")
+        q_obj = get_exam_question(qid)
+        if q_obj:
+            await set_panel(ctx, chat_id, "📝 إدارة السؤال", kb_exam_question_manage(qid))
+        return
+
+    # ── انتظار تعديل جواب امتحان ───────────────────────────────────
+    if state == "wait_exam_edit_a":
+        qid = ctx.user_data.pop("exam_edit_aqid", None)
+        if not qid:
+            ctx.user_data.pop("state", None); return
+        a_type, a_text, a_file_id = detect_content(m)
+        if not a_type:
+            await m.reply_text("⚠️ أرسل نصاً أو صورة أو ملفاً.")
+            ctx.user_data["exam_edit_aqid"] = qid; return
+        set_exam_answer(qid, a_type, a_text, a_file_id)
+        ctx.user_data.pop("state", None)
+        await m.reply_text("✅ تم تعديل الجواب.")
+        await set_panel(ctx, chat_id, "📝 إدارة السؤال", kb_exam_question_manage(qid))
+        return
+
     # ── انتظار اسم جديد للتعديل ───────────────────────────────────
     if state == "wait_edit_label":
         if not text or text in SPECIAL_BTNS:
@@ -914,6 +986,19 @@ async def on_message(update: Update, ctx):
                             kb_quiz_quick(b["id"]))
         else:
             await send_quiz_ready(m, b["id"])
+
+    elif b["type"] == "exam":
+        if is_admin(uid):
+            questions = get_exam_questions(b["id"])
+            await set_panel(ctx, chat_id,
+                            f"📝 *{b['label']}*\n_{len(questions)} سؤال_",
+                            kb_exam_quick(b["id"]))
+        else:
+            questions = get_exam_questions(b["id"])
+            if not questions:
+                await m.reply_text("📭 لا توجد أسئلة في هذا الامتحان بعد.")
+            else:
+                await send_exam_ready(m, b["id"])
 
     elif b["type"] == "special":
         action = b.get("special_action")

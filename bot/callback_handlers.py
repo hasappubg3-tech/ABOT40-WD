@@ -468,6 +468,87 @@ async def cb_manage(update: Update, ctx):
         await q.answer()
         return
 
+    # ── كول باكات الامتحان (لجميع المستخدمين) ──────────────────────
+    if d.startswith("ex_start_"):
+        bid = int(d[9:])
+        await q.answer()
+        questions = get_exam_questions(bid)
+        if not questions:
+            await q.edit_message_text("📭 لا توجد أسئلة في هذا الامتحان بعد.")
+            return
+        import asyncio
+        for n in ("3", "2", "1"):
+            try:
+                await q.edit_message_text(f"⏳ يبدأ الامتحان خلال *{n}*", parse_mode="Markdown")
+            except Exception:
+                pass
+            await asyncio.sleep(1)
+        try:
+            await q.edit_message_text("🚀 انطلق!")
+        except Exception:
+            pass
+        session = start_exam_session(ctx, uid, bid)
+        if session["q_ids"]:
+            await send_exam_question_to_user(q.message, bid, session["q_ids"][0], 1, session["total"])
+        return
+
+    if d.startswith("ex_ans_"):
+        parts = d[7:].split("_")
+        qid = int(parts[0])
+        bid = int(parts[1])
+        await q.answer()
+        session = get_exam_session(ctx, bid)
+        current_idx = 0
+        if session:
+            try:
+                current_idx = session["q_ids"].index(qid)
+            except ValueError:
+                current_idx = 0
+        total = session["total"] if session else len(get_exam_questions(bid))
+        try:
+            await q.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        await send_exam_answer_to_user(q.message, bid, qid, current_idx, total)
+        return
+
+    if d.startswith("ex_next_"):
+        parts = d[8:].split("_")
+        bid = int(parts[0])
+        current_qid = int(parts[1])
+        await q.answer()
+        session = get_exam_session(ctx, bid)
+        if not session:
+            await q.message.reply_text("⚠️ انتهت الجلسة. اضغط على زر الامتحان مجدداً للبدء.")
+            return
+        try:
+            current_idx = session["q_ids"].index(current_qid)
+            next_idx = current_idx + 1
+        except ValueError:
+            next_idx = 0
+        if next_idx >= session["total"]:
+            try:
+                await q.edit_message_reply_markup(reply_markup=None)
+            except Exception:
+                pass
+            await q.message.reply_text("🎉 *أحسنت! أنهيت الامتحان.*\n\nتم عرض جميع الأسئلة.", parse_mode="Markdown")
+            ctx.user_data.pop(_exam_session_key(bid), None)
+            return
+        next_qid = session["q_ids"][next_idx]
+        await send_exam_question_to_user(q.message, bid, next_qid, next_idx + 1, session["total"])
+        return
+
+    if d.startswith("ex_finish_"):
+        bid = int(d[10:])
+        await q.answer()
+        try:
+            await q.edit_message_reply_markup(reply_markup=None)
+        except Exception:
+            pass
+        await q.message.reply_text("🎉 *أحسنت! أنهيت الامتحان.*\n\nتم عرض جميع الأسئلة.", parse_mode="Markdown")
+        ctx.user_data.pop(_exam_session_key(bid), None)
+        return
+
     await q.answer()
     if not is_admin(uid): return
     chat_id = q.message.chat_id
@@ -972,6 +1053,11 @@ async def cb_manage(update: Update, ctx):
             items = get_items(ep)
             await q.edit_message_text(f"📄 *{b['label']}*\n_{len(items)} عنصر_",
                                       parse_mode="Markdown", reply_markup=kb_content_panel(ep))
+        elif b and b["type"] == "exam":
+            questions = get_exam_questions(ep)
+            await q.edit_message_text(
+                f"📝 *{b['label']}*\n_{len(questions)} سؤال_",
+                parse_mode="Markdown", reply_markup=kb_exam_panel(ep))
         elif b and b["type"] == "special":
             action = b.get("special_action")
             if action == "container":
@@ -1000,6 +1086,11 @@ async def cb_manage(update: Update, ctx):
             await q.edit_message_text(
                 f"📊 *{b['label']}*\n_{len(questions)} سؤال_",
                 parse_mode="Markdown", reply_markup=kb_quiz_panel(bid))
+        elif b["type"] == "exam":
+            questions = get_exam_questions(bid)
+            await q.edit_message_text(
+                f"📝 *{b['label']}*\n_{len(questions)} سؤال_",
+                parse_mode="Markdown", reply_markup=kb_exam_panel(bid))
         elif b["type"] == "special":
             action = b.get("special_action")
             if action == "container":
@@ -1129,6 +1220,98 @@ async def cb_manage(update: Update, ctx):
 
         return
 
+    # ── إدارة الامتحانات (للمشرفين) ───────────────────────────────
+    if d.startswith("ex_"):
+        await q.answer()
+
+        if d.startswith("ex_panel_"):
+            bid = int(d[9:])
+            b = get_btn(bid)
+            questions = get_exam_questions(bid)
+            await q.edit_message_text(
+                f"📝 *{b['label'] if b else 'امتحان'}*\n_{len(questions)} سؤال_",
+                parse_mode="Markdown", reply_markup=kb_exam_panel(bid))
+            return
+
+        if d.startswith("ex_list_"):
+            bid = int(d[8:])
+            b = get_btn(bid)
+            questions = get_exam_questions(bid)
+            await q.edit_message_text(
+                f"📋 *أسئلة: {b['label'] if b else 'امتحان'}*\n_{len(questions)} سؤال_\n\n⚠️ = يحتاج جواب | ✅ = جاهز",
+                parse_mode="Markdown", reply_markup=kb_exam_question_list(bid))
+            return
+
+        if d.startswith("ex_add_"):
+            bid = int(d[7:])
+            ctx.user_data["state"] = "wait_exam_q"
+            ctx.user_data["exam_q_bid"] = bid
+            await q.edit_message_text(
+                "📝 *إضافة سؤال امتحان*\n\nأرسل السؤال (نص، صورة، أو ملف):",
+                parse_mode="Markdown", reply_markup=kb_cancel_inline())
+            return
+
+        if d.startswith("ex_q_"):
+            qid = int(d[5:])
+            q_obj = get_exam_question(qid)
+            if not q_obj:
+                await q.answer("⚠️ السؤال غير موجود.", show_alert=True); return
+            has_answer = bool(q_obj.get("a_text") or q_obj.get("a_file_id"))
+            q_label = q_obj.get("q_text") or f"[{q_obj.get('q_type','text')}]"
+            a_label = (q_obj.get("a_text") or f"[{q_obj.get('a_type','text')}]") if has_answer else "لا يوجد جواب ⚠️"
+            text = (
+                f"📝 *السؤال:*\n{q_label[:300]}\n\n"
+                f"✅ *الجواب:*\n{a_label[:300]}"
+            )
+            await q.edit_message_text(text, parse_mode="Markdown",
+                                      reply_markup=kb_exam_question_manage(qid))
+            return
+
+        if d.startswith("ex_delq_"):
+            qid = int(d[8:])
+            q_obj = get_exam_question(qid)
+            bid = q_obj["button_id"] if q_obj else None
+            del_exam_question(qid)
+            if bid:
+                b = get_btn(bid)
+                questions = get_exam_questions(bid)
+                await q.edit_message_text(
+                    f"✅ تم حذف السؤال.\n\n📝 *{b['label'] if b else 'امتحان'}*\n_{len(questions)} سؤال_",
+                    parse_mode="Markdown", reply_markup=kb_exam_question_list(bid))
+            return
+
+        if d.startswith("ex_toggle_rand_"):
+            bid = int(d[15:])
+            toggle_random_exam(bid)
+            b = get_btn(bid)
+            questions = get_exam_questions(bid)
+            random_e = (b.get("random_exam", 0) or 0) if b else 0
+            status = "✅ التوزيع العشوائي مفعّل — الأسئلة بترتيب عشوائي" if random_e else "⭕ التوزيع العشوائي مُلغى — الأسئلة بالترتيب"
+            await q.edit_message_text(
+                f"📝 *{b['label'] if b else 'امتحان'}*\n_{len(questions)} سؤال_\n\n{status}",
+                parse_mode="Markdown", reply_markup=kb_exam_panel(bid))
+            return
+
+        if d.startswith("ex_edit_q_"):
+            qid = int(d[10:])
+            ctx.user_data["state"] = "wait_exam_edit_q"
+            ctx.user_data["exam_edit_qid"] = qid
+            await q.edit_message_text(
+                "✏️ أرسل السؤال الجديد (نص، صورة، أو ملف):",
+                reply_markup=kb_cancel_inline())
+            return
+
+        if d.startswith("ex_edit_a_"):
+            qid = int(d[10:])
+            ctx.user_data["state"] = "wait_exam_edit_a"
+            ctx.user_data["exam_edit_aqid"] = qid
+            await q.edit_message_text(
+                "✏️ أرسل الجواب الجديد (نص، صورة، أو ملف):",
+                reply_markup=kb_cancel_inline())
+            return
+
+        return
+
     # ── تبديل موضع زرين ──────────────────────────────────────────
     if d.startswith("swp_start_"):
         pctx = d[10:]; ep = None if pctx == "r" else int(pctx)
@@ -1221,8 +1404,8 @@ async def cb_manage(update: Update, ctx):
         ctx.user_data["add_pid"] = b["parent_id"] if b else None
         await q.edit_message_text("أين تريد إضافة الزر الجديد؟", reply_markup=kb_add_position(after_bid)); return
 
-    if d in ("pt_m", "pt_c", "pt_s", "pt_q"):
-        t = "menu" if d == "pt_m" else ("content" if d == "pt_c" else ("special" if d == "pt_s" else "quiz"))
+    if d in ("pt_m", "pt_c", "pt_s", "pt_q", "pt_e"):
+        t = {"pt_m": "menu", "pt_c": "content", "pt_s": "special", "pt_q": "quiz", "pt_e": "exam"}[d]
         ctx.user_data["new_type"] = t
         ctx.user_data["state"] = "wait_label"
         await q.edit_message_text("✏️ اكتب اسم الزر الجديد:", reply_markup=kb_cancel_inline()); return
