@@ -1,5 +1,22 @@
 from .shared import *
 
+def _btn_visible_for_user(b):
+    """هل يُعرض هذا الزر للمستخدم العادي؟ لا إذا كان مخفياً يدوياً أو فارغاً تلقائياً."""
+    if b.get("hidden", 0):
+        return False
+    if b["type"] == "content" and not get_items(b["id"]):
+        return False
+    if b["type"] == "compound" and not get_buttons(b["id"]):
+        return False
+    return True
+
+def _hidden_toggle_row(b):
+    """صف زر تبديل الإخفاء/الإظهار لأي نوع زر."""
+    bid = b["id"]
+    is_hidden = b.get("hidden", 0) or 0
+    label = "👁 إظهار الزر للمستخدمين" if is_hidden else "🚫 إخفاء الزر عن المستخدمين"
+    return [InlineKeyboardButton(label, callback_data=f"btn_toggle_hide_{bid}")]
+
 def build_kb(uid, pid=None):
     btns = get_buttons(pid)
     admin = is_admin(uid)
@@ -7,6 +24,8 @@ def build_kb(uid, pid=None):
     current_row = []
     last_bid_in_row = None
     for i, b in enumerate(btns):
+        if not admin and not _btn_visible_for_user(b):
+            continue
         if i > 0 and b.get('new_row', 1):
             if current_row:
                 if admin and last_bid_in_row is not None:
@@ -103,6 +122,7 @@ def kb_quiz_quick(bid):
     rand_label = "🔀 إلغاء التوزيع العشوائي" if random_q else "🔀 تفعيل التوزيع العشوائي"
     rows.append([InlineKeyboardButton(rand_label, callback_data=f"qz_toggle_rand_{bid}")])
     rows.append([InlineKeyboardButton("✏️ تغيير الاسم", callback_data=f"el_{bid}")])
+    if b: rows.append(_hidden_toggle_row(b))
     rows.append([InlineKeyboardButton("🗑 حذف", callback_data=f"confirm_x_{bid}")])
     return InlineKeyboardMarkup(rows)
 
@@ -185,6 +205,7 @@ def kb_exam_quick(bid):
     rand_label = "🔀 إلغاء التوزيع العشوائي" if random_e else "🔀 تفعيل التوزيع العشوائي"
     rows.append([InlineKeyboardButton(rand_label, callback_data=f"ex_toggle_rand_{bid}")])
     rows.append([InlineKeyboardButton("✏️ تغيير الاسم", callback_data=f"el_{bid}")])
+    if b: rows.append(_hidden_toggle_row(b))
     rows.append([InlineKeyboardButton("🗑 حذف", callback_data=f"confirm_x_{bid}")])
     return InlineKeyboardMarkup(rows)
 
@@ -388,11 +409,13 @@ def kb_content_panel(bid):
 
 
 def kb_compound_user(bid):
-    """الأزرار الداخلية للزر المدمج كما يراها المستخدم."""
+    """الأزرار الداخلية للزر المدمج كما يراها المستخدم (مع إخفاء الفارغة والمخفية)."""
     children = get_buttons(bid)
     rows = []
     current_row = []
     for i, ch in enumerate(children):
+        if not _btn_visible_for_user(ch):
+            continue
         btn = InlineKeyboardButton(ch["label"], callback_data=f"cmp_open_{ch['id']}")
         if i > 0 and ch.get("new_row", 1) and current_row:
             rows.append(current_row); current_row = []
@@ -433,6 +456,7 @@ def _kb_compound_panel_rows(bid, with_back=True):
     rows.append([InlineKeyboardButton("✏️ تعديل نص الرسالة", callback_data=f"cmp_text_{bid}")])
     rows.append([InlineKeyboardButton("👁 معاينة الرسالة", callback_data=f"cmp_preview_{bid}")])
     rows.append([InlineKeyboardButton("✏️ تغيير الاسم", callback_data=f"el_{bid}")])
+    if b: rows.append(_hidden_toggle_row(b))
     rows.append([InlineKeyboardButton("🗑 حذف الزر", callback_data=f"confirm_x_{bid}")])
     if with_back:
         pid = b["parent_id"] if b else None
@@ -481,8 +505,9 @@ def kb_menu_quick(bid):
     siblings = get_buttons(pid)
     rows = [
         [InlineKeyboardButton("✏️ تغيير الاسم", callback_data=f"el_{bid}")],
-        [InlineKeyboardButton("🗑 حذف",          callback_data=f"confirm_x_{bid}")],
     ]
+    if b: rows.append(_hidden_toggle_row(b))
+    rows.append([InlineKeyboardButton("🗑 حذف", callback_data=f"confirm_x_{bid}")])
     if len(siblings) >= 2:
         rows.append([InlineKeyboardButton("🔀 تبديل الموضع", callback_data=f"swp_start_{'r' if pid is None else str(pid)}")])
     return InlineKeyboardMarkup(rows)
@@ -509,6 +534,7 @@ def kb_content_quick(bid):
     unified_label = "🔀 إلغاء توحيد التقييم" if unified else "⭐ توحيد التقييم"
     rows.append([InlineKeyboardButton(unified_label, callback_data=f"ci_toggle_urating_{bid}")])
     rows.append([InlineKeyboardButton("✏️ تغيير الاسم", callback_data=f"el_{bid}")])
+    if b: rows.append(_hidden_toggle_row(b))
     rows.append([InlineKeyboardButton("🗑 حذف",          callback_data=f"confirm_x_{bid}")])
     return InlineKeyboardMarkup(rows)
 
@@ -517,8 +543,9 @@ def kb_special_quick(bid):
     b = get_btn(bid)
     rows = [
         [InlineKeyboardButton("✏️ تغيير الاسم", callback_data=f"el_{bid}")],
-        [InlineKeyboardButton("🗑 حذف",          callback_data=f"confirm_x_{bid}")],
     ]
+    if b: rows.append(_hidden_toggle_row(b))
+    rows.append([InlineKeyboardButton("🗑 حذف", callback_data=f"confirm_x_{bid}")])
     if b and b.get("special_action") in ("file_request", "file_upload"):
         rows.insert(0, [InlineKeyboardButton("👥 مشرفين الملفات", callback_data=f"fr_admins_{bid}")])
     if b and b.get("special_action") == "file_upload":

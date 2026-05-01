@@ -236,6 +236,11 @@ def init_db():
             c.commit()
         except Exception:
             pass
+        try:
+            c.execute("ALTER TABLE buttons ADD COLUMN hidden INTEGER DEFAULT 0")
+            c.commit()
+        except Exception:
+            pass
         c.execute("""
             CREATE TABLE IF NOT EXISTS exam_questions (
                 id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -421,6 +426,11 @@ def set_compound_text(bid, text):
 def set_btn_unified_rating(bid, val=1):
     c = db()
     c.execute("UPDATE buttons SET unified_rating=? WHERE id=?", (1 if val else 0, bid))
+    c.commit(); c.close()
+
+def set_btn_hidden(bid, val=1):
+    c = db()
+    c.execute("UPDATE buttons SET hidden=? WHERE id=?", (1 if val else 0, bid))
     c.commit(); c.close()
 
 def set_btn_no_caption(bid, val=1):

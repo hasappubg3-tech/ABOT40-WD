@@ -1033,6 +1033,51 @@ async def cb_manage(update: Update, ctx):
         )
         return
 
+    # ── تبديل إخفاء/إظهار أي زر ─────────────────────────────────
+    if d.startswith("btn_toggle_hide_"):
+        bid = int(d[len("btn_toggle_hide_"):])
+        b = get_btn(bid)
+        if not b:
+            return
+        new_val = 0 if (b.get("hidden", 0) or 0) else 1
+        set_btn_hidden(bid, new_val)
+        b = get_btn(bid)
+        status = "🚫 الزر مخفي الآن عن المستخدمين" if new_val else "👁 الزر مرئي الآن للمستخدمين"
+        t = b.get("type", "")
+        if t == "content":
+            items = get_items(bid)
+            kb = kb_content_quick(bid)
+            await q.edit_message_text(
+                f"📄 *{b['label']}*\n_{len(items)} عنصر_\n\n{status}",
+                parse_mode="Markdown", reply_markup=kb)
+        elif t == "menu":
+            kb = kb_menu_quick(bid)
+            await q.edit_message_text(
+                f"📂 *{b['label']}*\n\n{status}",
+                parse_mode="Markdown", reply_markup=kb)
+        elif t == "compound":
+            children = get_buttons(bid)
+            kb = kb_compound_quick(bid)
+            await q.edit_message_text(
+                f"🧩 *{b['label']}*\n_{len(children)} زر داخلي_\n\n{status}",
+                parse_mode="Markdown", reply_markup=kb)
+        elif t == "quiz":
+            kb = kb_quiz_quick(bid)
+            await q.edit_message_text(
+                f"📊 *{b['label']}*\n\n{status}",
+                parse_mode="Markdown", reply_markup=kb)
+        elif t == "exam":
+            kb = kb_exam_quick(bid)
+            await q.edit_message_text(
+                f"📝 *{b['label']}*\n\n{status}",
+                parse_mode="Markdown", reply_markup=kb)
+        else:
+            kb = kb_special_quick(bid)
+            await q.edit_message_text(
+                f"⭐ *{b['label']}*\n\n{status}",
+                parse_mode="Markdown", reply_markup=kb)
+        return
+
     # ── إعدادات النظام 1: رسالة الاشتراك ────────────────────────
     if d == "st_notif1":
         msg      = get_setting("notif_message", "")
