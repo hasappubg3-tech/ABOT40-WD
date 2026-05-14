@@ -1,9 +1,12 @@
-FROM python:3.11
+FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY . .
+# نسخ ملف المتطلبات أولاً لتحسين سرعة البناء
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip install -r requirements.txt
+# نسخ بقية الملفات بما فيها قاعدة البيانات
+COPY . .
 
 CMD ["python", "main.py"]
