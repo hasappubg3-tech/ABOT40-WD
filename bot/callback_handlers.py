@@ -686,7 +686,7 @@ async def cb_manage(update: Update, ctx):
                 ]])
             degree = exam_score(progress.get("correct") or 0, progress.get("total") or 0)
             await q.message.reply_text(
-                "🎉 *أنهيت هذا الموضوع!*\n\n"
+                "🎉 *أنهيت هذا الفصل!*\n\n"
                 f"🧩 الأسئلة: *{progress.get('answered')}/{progress.get('total')}*\n"
                 f"✅ عرفت: *{progress.get('correct')}*\n"
                 f"❌ لم تعرف: *{progress.get('wrong')}*\n"
@@ -751,12 +751,9 @@ async def cb_manage(update: Update, ctx):
         parts = d[len("exg_topic_"):].split("_")
         parent_bid = int(parts[0])
         topic_bid = int(parts[1])
-        if not is_exam_topic_unlocked(uid, parent_bid, topic_bid):
-            await q.answer("🔒 أكمل الموضوع السابق أولاً.", show_alert=True)
-            return
         questions = get_exam_questions(topic_bid)
         if not questions:
-            await q.answer("📭 هذا الموضوع لا يحتوي أسئلة بعد.", show_alert=True)
+            await q.answer("📭 هذا الفصل لا يحتوي أسئلة بعد.", show_alert=True)
             return
         await q.answer()
         await send_exam_ready(q.message, topic_bid)
@@ -774,7 +771,7 @@ async def cb_manage(update: Update, ctx):
         b = get_btn(bid)
         topics = get_exam_topics(bid)
         await q.edit_message_text(
-            f"🎓 *{b['label'] if b else 'امتحان'}*\n_{len(topics)} موضوع_\n\nإدارة مواضيع الامتحان:",
+            f"🎓 *{b['label'] if b else 'امتحان'}*\n_{len(topics)} فصل_\n\nإدارة فصول الامتحان:",
             parse_mode="Markdown", reply_markup=kb_exam_group_manage(bid))
         return
 
@@ -789,7 +786,7 @@ async def cb_manage(update: Update, ctx):
         ctx.user_data["state"] = "wait_label"
         ctx.user_data["_from_exg"] = bid
         await q.edit_message_text(
-            "✏️ *إضافة موضوع جديد*\n\nاكتب اسم الموضوع:",
+            "✏️ *إضافة فصل جديد*\n\nاكتب اسم الفصل:",
             parse_mode="Markdown", reply_markup=kb_cancel_inline())
         return
 
@@ -1394,7 +1391,7 @@ async def cb_manage(update: Update, ctx):
         elif b and b["type"] == "exam_group":
             topics = get_exam_topics(ep)
             await q.edit_message_text(
-                f"{btn_id_header(ep)}🎓 *{b['label']}*\n_{len(topics)} موضوع_\n\nإدارة مواضيع الامتحان:",
+                f"{btn_id_header(ep)}🎓 *{b['label']}*\n_{len(topics)} فصل_\n\nإدارة فصول الامتحان:",
                 parse_mode="Markdown", reply_markup=kb_exam_group_manage(ep))
         elif b and b["type"] == "compound":
             ctx.user_data["pid"] = b.get("parent_id")
@@ -1438,7 +1435,7 @@ async def cb_manage(update: Update, ctx):
         elif b["type"] == "exam_group":
             topics = get_exam_topics(bid)
             await q.edit_message_text(
-                f"{btn_id_header(bid)}🎓 *{b['label']}*\n_{len(topics)} موضوع_\n\nإدارة مواضيع الامتحان:",
+                f"{btn_id_header(bid)}🎓 *{b['label']}*\n_{len(topics)} فصل_\n\nإدارة فصول الامتحان:",
                 parse_mode="Markdown", reply_markup=kb_exam_group_manage(bid))
         elif b["type"] == "compound":
             children = get_buttons(bid)

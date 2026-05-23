@@ -1316,11 +1316,6 @@ async def on_message(update: Update, ctx):
                             f"{btn_id_header(b['id'])}📝 *{b['label']}*\n_{len(questions)} سؤال_",
                             kb_exam_quick(b["id"]))
         else:
-            parent_btn = get_btn(b.get("parent_id")) if b.get("parent_id") else None
-            if parent_btn and parent_btn["type"] == "exam_group":
-                if not is_exam_topic_unlocked(uid, parent_btn["id"], b["id"]):
-                    await m.reply_text("🔒 أكمل الموضوع السابق أولاً.")
-                    return
             questions = get_exam_questions(b["id"])
             if not questions:
                 await m.reply_text("📭 لا توجد أسئلة في هذا الامتحان بعد.")

@@ -215,15 +215,10 @@ def kb_exam_quick(bid):
 def exam_group_text(bid, uid):
     b = get_btn(bid)
     s = exam_group_summary(uid, bid)
-    degree = round(((s.get("correct") or 0) / (s.get("total_questions") or 1)) * 100) if s.get("total_questions") else 0
     return (
         f"🎓 *{b['label'] if b else 'زر الامتحان'}*\n\n"
-        f"📚 المواضيع: *{s['completed_topics']}/{s['total_topics']}*\n"
-        f"🧩 الأسئلة المجابة: *{s['answered']}/{s['total_questions']}*\n"
-        f"✅ صحيحة: *{s['correct']}* | ❌ خاطئة: *{s['wrong']}*\n"
-        f"🏅 درجتي العامة: *{degree}/100*\n"
-        f"📈 الإنجاز: *{s['percent']}%*\n\n"
-        "ابدأ بالموضوع الأول، وبعد إكماله ينفتح الموضوع التالي."
+        f"📚 الفصول المكتملة: *{s['completed_topics']}/{s['total_topics']}*\n\n"
+        "اختر الفصل الذي تريد الاختبار فيه:"
     )
 
 def exam_score(correct, total):
@@ -238,14 +233,14 @@ def exam_group_stats_text(bid, uid):
         f"📊 *إحصائيات الامتحانات: {b['label'] if b else 'زر الامتحان'}*",
         "",
         f"🏅 درجتي العامة: *{overall_degree}/100*",
-        f"📚 الامتحانات المكتملة: *{s['completed_topics']}/{s['total_topics']}*",
+        f"📚 الفصول المكتملة: *{s['completed_topics']}/{s['total_topics']}*",
         f"🧩 الأسئلة المجابة: *{s['answered']}/{s['total_questions']}*",
         f"✅ صحيحة: *{s['correct']}* | ❌ خاطئة: *{s['wrong']}*",
         "",
-        "📋 *درجاتي لكل امتحان:*",
+        "📋 *درجاتي لكل فصل:*",
     ]
     if not topics:
-        lines.append("📭 لا توجد امتحانات بعد.")
+        lines.append("📭 لا توجد فصول بعد.")
         return "\n".join(lines)
     for i, topic in enumerate(topics, start=1):
         questions_count = len(get_exam_questions(topic["id"]))
@@ -255,13 +250,13 @@ def exam_group_stats_text(bid, uid):
         correct = progress.get("correct") or 0
         wrong = progress.get("wrong") or 0
         degree = exam_score(correct, total)
-        status = "✅ مكتمل" if progress.get("completed") else "⏳ غير مكتمل"
+        status = "✅ مكتمل" if progress.get("completed") else "❌ غير مكتمل"
         lines.append(
             f"\n{i}. *{topic['label']}* — {status}\n"
             f"   🏅 درجتي: *{degree}/100*\n"
             f"   🧩 المجابة: *{answered}/{total}* | ✅ *{correct}* | ❌ *{wrong}*"
         )
-    lines.append("\nملاحظة: يمكن تعديل درجتك خلال إعادة الامتحان.")
+    lines.append("\nملاحظة: يمكن تعديل درجتك خلال إعادة الفصل.")
     return "\n".join(lines)
 
 def build_exam_group_kb(uid, parent_bid):
@@ -269,7 +264,9 @@ def build_exam_group_kb(uid, parent_bid):
     topics = get_exam_topics(parent_bid)
     rows = [[KeyboardButton(BTN_EXAM_STATS)]]
     for topic in topics:
-        rows.append([KeyboardButton(topic['label'] + _encode_bid(topic['id']))])
+        progress = get_exam_progress(uid, topic['id'])
+        status = "✅" if progress.get("completed") else "❌"
+        rows.append([KeyboardButton(status + " " + topic['label'] + _encode_bid(topic['id']))])
     rows.append([KeyboardButton(BTN_BACK), KeyboardButton(BTN_HOME)])
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
@@ -278,14 +275,12 @@ def kb_exam_group_user(bid, uid):
     topics = get_exam_topics(bid)
     for topic in topics:
         progress = get_exam_progress(uid, topic["id"])
-        unlocked = is_exam_topic_unlocked(uid, bid, topic["id"])
-        status = "✅" if progress.get("completed") else ("🔓" if unlocked else "🔒")
+        status = "✅" if progress.get("completed") else "❌"
         q_count = len(get_exam_questions(topic["id"]))
         label = f"{status} {topic['label']} ({progress.get('answered') or 0}/{q_count})"
-        cb = f"exg_topic_{bid}_{topic['id']}" if unlocked else "noop"
-        rows.append([InlineKeyboardButton(label, callback_data=cb)])
+        rows.append([InlineKeyboardButton(label, callback_data=f"exg_topic_{bid}_{topic['id']}")])
     if not rows:
-        rows.append([InlineKeyboardButton("📭 لا توجد مواضيع بعد", callback_data="noop")])
+        rows.append([InlineKeyboardButton("📭 لا توجد فصول بعد", callback_data="noop")])
     return InlineKeyboardMarkup(rows)
 
 def kb_exam_group_quick(bid):
@@ -313,7 +308,7 @@ def kb_exam_group_manage(bid):
         ])
     if not rows:
         rows.append([InlineKeyboardButton("📭 لا توجد مواضيع بعد", callback_data="noop")])
-    rows.append([InlineKeyboardButton("➕ إضافة موضوع جديد", callback_data=f"exg_add_topic_{bid}")])
+    rows.append([InlineKeyboardButton("➕ إضافة فصل جديد", callback_data=f"exg_add_topic_{bid}")])
     rows.append([InlineKeyboardButton("✏️ تغيير اسم زر الامتحان", callback_data=f"el_{bid}")])
     rows.append([InlineKeyboardButton("🗑 حذف زر الامتحان", callback_data=f"confirm_x_{bid}")])
     pid = b["parent_id"] if b else None
