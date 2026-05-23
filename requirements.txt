@@ -7,3 +7,9 @@ python-telegram-bot==20.7
 requests
 dnspython
 pymongo
+dnspython
+flask
+httpx
+pymongo
+python-telegram-bot==20.7
+requests
