@@ -677,7 +677,7 @@ def kb_settings():
 def kb_api_keys():
     all_keys = get_all_gemini_keys()
     db_keys_str = get_setting("gemini_keys_db", "")
-    db_count = len([k for k in db_keys_str.split(",") if k.strip()]) if db_keys_str else 0
+    db_count = len([k for k in db_keys_str.splitlines() if k.strip()]) if db_keys_str else 0
     rows = [
         [InlineKeyboardButton("➕ إضافة / تعديل مفاتيح Gemini", callback_data="st_api_keys_set")],
     ]

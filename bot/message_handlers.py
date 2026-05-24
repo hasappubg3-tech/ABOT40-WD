@@ -849,10 +849,10 @@ async def on_message(update: Update, ctx):
             await m.reply_text("⚠️ أرسل نصاً صحيحاً يحتوي المفاتيح."); return
         ctx.user_data.pop("state", None)
         raw = m.text.strip()
-        keys = [k.strip() for k in raw.split(",") if k.strip()]
+        keys = [k.strip() for k in raw.splitlines() if k.strip()]
         if not keys:
             await m.reply_text("⚠️ لم يُتعرَّف على أي مفتاح صالح."); return
-        set_setting("gemini_keys_db", ",".join(keys))
+        set_setting("gemini_keys_db", "\n".join(keys))
         await set_panel(ctx, chat_id, "⚙️ *الاعدادات*", kb_settings())
         await m.reply_text(
             f"✅ تم حفظ *{len(keys)}* مفتاح Gemini في قاعدة البيانات.\n"

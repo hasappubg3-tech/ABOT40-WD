@@ -102,7 +102,7 @@ def get_global_caption():
 def get_all_gemini_keys():
     """يجمع مفاتيح Gemini من متغيرات البيئة وقاعدة البيانات (بدون تكرار)."""
     db_keys_str = get_setting("gemini_keys_db", "")
-    db_keys = [k.strip() for k in db_keys_str.split(",") if k.strip()] if db_keys_str else []
+    db_keys = [k.strip() for k in db_keys_str.splitlines() if k.strip()] if db_keys_str else []
     all_keys = list(GEMINI_KEYS)
     for k in db_keys:
         if k not in all_keys:
