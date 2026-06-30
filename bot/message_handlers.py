@@ -957,6 +957,97 @@ async def on_message(update: Update, ctx):
         )
         return
 
+    # ── حالات جلسات الدراسة ───────────────────────────────────────────
+    if state == "wait_ses_study_time":
+        try:
+            val = int(text.strip())
+            if not (5 <= val <= 180):
+                raise ValueError
+        except ValueError:
+            await m.reply_text("⚠️ أرسل رقماً بين 5 و 180."); return
+        ctx.user_data["ses_study_time"] = val
+        ctx.user_data.pop("state", None)
+        await m.reply_text(
+            f"✅ وقت الدراسة: *{val} دقيقة*\n\n☕ اختر وقت الاستراحة:",
+            parse_mode="Markdown",
+            reply_markup=kb_ses_break_time(),
+        )
+        return
+
+    if state == "wait_ses_break_time":
+        try:
+            val = int(text.strip())
+            if not (1 <= val <= 60):
+                raise ValueError
+        except ValueError:
+            await m.reply_text("⚠️ أرسل رقماً بين 1 و 60."); return
+        ctx.user_data["ses_break_time"] = val
+        ctx.user_data.pop("state", None)
+        await m.reply_text(
+            f"✅ وقت الاستراحة: *{val} دقيقة*\n\nهل الغرفة عامة أم خاصة؟",
+            parse_mode="Markdown",
+            reply_markup=kb_ses_privacy(),
+        )
+        return
+
+    if state == "wait_ses_password":
+        pw = text.strip()
+        if len(pw) < 2:
+            await m.reply_text("⚠️ الرمز قصير جداً (حرفان على الأقل)."); return
+        study = ctx.user_data.pop("ses_study_time", None)
+        brk   = ctx.user_data.pop("ses_break_time", None)
+        ctx.user_data.pop("state", None)
+        if not study or not brk:
+            await m.reply_text("⚠️ انتهت جلسة الإنشاء. ابدأ من جديد."); return
+        user_obj  = update.effective_user
+        uname = user_obj.first_name or user_obj.username or str(uid)
+        rid  = ses_create_room(uid, uname, study, brk, password=pw)
+        room = ses_get_room(rid)
+        pts  = ses_get_participants(rid)
+        await m.reply_text(
+            f"✅ *تم إنشاء الغرفة المقفلة!*\n\n"
+            f"🔒 الرمز السري: `{pw}`\n\n"
+            f"📚 {study}د دراسة | ☕ {brk}د استراحة\n"
+            f"👥 المشاركون: *{len(pts)}*\n\n"
+            "شارك الرمز مع الأصدقاء، ثم اضغط *بدء الجلسة* عندما يكون الجميع جاهزاً.",
+            parse_mode="Markdown",
+            reply_markup=kb_ses_room(room, uid, True),
+        )
+        return
+
+    if state == "wait_ses_join_pw":
+        rid = ctx.user_data.pop("ses_join_rid", None)
+        ctx.user_data.pop("state", None)
+        if not rid:
+            await m.reply_text("⚠️ انتهت العملية. حاول مرة ثانية."); return
+        room = ses_get_room(rid)
+        if not room:
+            await m.reply_text("⚠️ الغرفة غير موجودة أو انتهت."); return
+        if text.strip() != (room.get("password") or ""):
+            # رمز خاطئ — أعد المحاولة
+            ctx.user_data["state"]       = "wait_ses_join_pw"
+            ctx.user_data["ses_join_rid"] = rid
+            await m.reply_text(
+                "❌ الرمز غير صحيح. حاول مرة ثانية:",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("❌ إلغاء", callback_data="ses_rooms"),
+                ]]),
+            )
+            return
+        user_obj = update.effective_user
+        uname = user_obj.first_name or user_obj.username or str(uid)
+        ses_join_room(rid, uid, uname)
+        room = ses_get_room(rid)
+        pts  = ses_get_participants(rid)
+        await m.reply_text(
+            "✅ *انضممت للغرفة!*\n\n" +
+            f"📚 {room['study_time']}د دراسة | ☕ {room['break_time']}د استراحة\n"
+            f"👥 المشاركون: *{len(pts)}*",
+            parse_mode="Markdown",
+            reply_markup=kb_ses_room(room, uid, True),
+        )
+        return
+
     if state == "wait_comment":
         target_type = ctx.user_data.pop("comment_target_type", None)
         target_id = ctx.user_data.pop("comment_target_id", None)
@@ -1652,6 +1743,16 @@ async def on_message(update: Update, ctx):
                     parse_mode="Markdown",
                     reply_markup=kb_file_upload_cancel()
                 )
+        elif action == "sessions":
+            await m.reply_text(
+                ses_menu_text(),
+                parse_mode="Markdown",
+                reply_markup=kb_ses_main(),
+            )
+            if is_admin(uid):
+                await set_panel(ctx, chat_id,
+                                f"{btn_id_header(b['id'])}⭐ *{b['label']}*\n_زر جلسات الدراسة_",
+                                kb_special_quick(b["id"]))
         elif action == "top_users":
             await m.reply_text(
                 top_users_text(),

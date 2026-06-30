@@ -118,6 +118,11 @@ async def cb_manage(update: Update, ctx):
             await after_mlz_subject_pick(q, ctx, uid, chat_id, bid)
         return
 
+    # ── جلسات الدراسة الجماعية ──────────────────────────────────────────
+    if d.startswith("ses_"):
+        await handle_ses_callback(q, ctx, uid, q.message.chat_id)
+        return
+
     # ── رد المشرف على المستخدم (زر الرد) ────────────────────────────────
     if d.startswith("freply_"):
         if not is_file_supervisor(uid):
