@@ -13,13 +13,16 @@ async def cb_manage(update: Update, ctx):
     if (d.startswith("notif_ok_")      or d.startswith("notif_skip_")
             or d.startswith("notif_decline_") or d.startswith("notif_anger_")
             or d.startswith("notif_chan_")    or d.startswith("notif_check_")
-            or d.startswith("notif_chkno_")  or d.startswith("notif_check2_")):
+            or d.startswith("notif_chkno_")  or d.startswith("notif_check2_")
+            or d.startswith("notif_subok_")):
 
         # ─── دالة مساعدة: إرسال رسالة الشكر وتسليم الملف ────────────
         async def _thanks_and_deliver(bid_str_v, chat_id_v):
             record_channel_subscription(uid)
             clear_pending_notif(uid)
             ctx.user_data.pop("sub_no_count", None)
+            reset_notif_no_count(uid)
+            clear_file_block(uid)
             try:
                 await ctx.bot.send_message(
                     chat_id=chat_id_v,
@@ -96,7 +99,9 @@ async def cb_manage(update: Update, ctx):
                     except Exception: pass
             if sub_status is False:
                 # كذّاب ثاني — popup + تسليم الملف قسراً
-                await q.answer("الجذاب الله يخلي بالنار 🔥", show_alert=True)
+                await q.answer("روح مزاعلين ):", show_alert=True)
+                if get_notif_no_count(uid) >= 4:
+                    set_force_next_notif(uid, True)
                 await deliver_denied_content(ctx.bot, chat_id_v, bid_str)
                 return
             # مشترك ✓
@@ -144,7 +149,25 @@ async def cb_manage(update: Update, ctx):
             chat_id_v = q.message.chat_id
             try: await q.message.delete()
             except Exception: pass
+            if get_notif_no_count(uid) < 4:
+                set_notif_no_count(uid, 4)
+            set_force_next_notif(uid, True)
             await deliver_denied_content(ctx.bot, chat_id_v, bid_str)
+            return
+
+        # ─ "تمام اشتركت" — زر أسفل رسالة الحظر (المرة الخامسة+) ────
+        if d.startswith("notif_subok_"):
+            bid_str    = d[len("notif_subok_"):]
+            chat_id_v  = q.message.chat_id
+            sub_status = await is_subscribed(ctx.bot, uid)
+            if sub_status is False:
+                await q.answer("چذاب 😏", show_alert=True)
+                return
+            # مشترك فعلاً أو تعذّر الفحص → نسمح بالمتابعة
+            await q.answer()
+            try: await q.message.delete()
+            except Exception: pass
+            await _thanks_and_deliver(bid_str, chat_id_v)
             return
 
         # ─ زر "نعم اشتركت" ─────────────────────────────────────────
@@ -174,6 +197,8 @@ async def cb_manage(update: Update, ctx):
                 record_channel_subscription(uid)
             clear_pending_notif(uid)
             ctx.user_data.pop("sub_no_count", None)
+            reset_notif_no_count(uid)
+            clear_file_block(uid)
             try: await q.edit_message_reply_markup(reply_markup=None)
             except Exception: pass
             try:
@@ -197,14 +222,13 @@ async def cb_manage(update: Update, ctx):
         if d.startswith("notif_skip_"):
             bid_str  = d[len("notif_skip_"):]
             chan     = get_setting("notif_channel", "").strip()
-            no_count = ctx.user_data.get("sub_no_count", 0) + 1
-            ctx.user_data["sub_no_count"] = no_count
+            no_count = inc_notif_no_count(uid)
             url = (chan if chan.startswith("http") else f"https://t.me/{chan.lstrip('@')}") if chan else None
             chat_id_v = q.message.chat_id
 
             # ── مرة 1 → منبثقة + حذف الرسالة + تسليم الملف ─────────
             if no_count == 1:
-                await q.answer("Ó╭╮Ò", show_alert=True)
+                await q.answer("طيب ما عليك 🙂", show_alert=True)
                 try: await q.message.delete()
                 except Exception: pass
                 await deliver_denied_content(ctx.bot, chat_id_v, bid_str)
@@ -251,22 +275,26 @@ async def cb_manage(update: Update, ctx):
                 except Exception: pass
                 return
 
-            # ── مرة 5+ → ملصق + نص عشوائي + الملف المطلوب مباشرة ───
+            # ── مرة 5+ → حظر فعلي لمدة ساعة + صورة وزر "تمام اشتركت" ───
             await q.answer()
-            import random as _random
-            stickers_raw = get_setting("notif_decline_stickers", "")
-            texts_raw    = get_setting("notif_decline_texts",    "")
-            stickers = [s.strip() for s in stickers_raw.split("\n") if s.strip()]
-            texts    = [t.strip() for t in texts_raw.split("\n")    if t.strip()]
-            if stickers:
-                try:
-                    await ctx.bot.send_sticker(chat_id=chat_id_v, sticker=_random.choice(stickers))
-                except Exception: pass
-            if texts:
-                try:
-                    await ctx.bot.send_message(chat_id=chat_id_v, text=_random.choice(texts))
-                except Exception: pass
-            await deliver_denied_content(ctx.bot, chat_id_v, bid_str)
+            block_photo = get_setting("notif_block_photo", "").strip()
+            block_text  = get_setting("notif_block_text", "مزاعلين ما ارسلك اي ملف لمدة ساعة 🙂")
+            block_user_files(uid, 3600)
+            reset_notif_no_count(uid)
+            block_markup = InlineKeyboardMarkup([[
+                InlineKeyboardButton("تمام اشتركت", callback_data=f"notif_subok_{bid_str}")
+            ]])
+            try:
+                if block_photo:
+                    await ctx.bot.send_photo(
+                        chat_id=chat_id_v, photo=block_photo,
+                        caption=block_text, reply_markup=block_markup
+                    )
+                else:
+                    await ctx.bot.send_message(
+                        chat_id=chat_id_v, text=block_text, reply_markup=block_markup
+                    )
+            except Exception: pass
             return
 
         return
@@ -1717,51 +1745,37 @@ async def cb_manage(update: Update, ctx):
         )
         return
 
-    if d == "st_notif_stickers":
-        ctx.user_data["state"] = "wait_notif_stickers"
-        cur = get_setting("notif_decline_stickers", "")
-        cur_preview = f"\n\nالملصقات الحالية ({len([s for s in cur.split(chr(10)) if s.strip()])} ملصق):\n`{cur[:300]}`" if cur.strip() else "\n\nلا توجد ملصقات بعد."
+    if d == "st_notif_block_photo":
+        ctx.user_data["state"] = "wait_notif_block_photo"
+        has_photo = bool(get_setting("notif_block_photo", "").strip())
         await q.edit_message_text(
-            f"🎭 *ملصقات الرفض* (تظهر من المرة السادسة فصاعداً){cur_preview}\n\n"
-            "أرسل ملصقاً واحداً أو أكثر متتالياً، وعند الانتهاء أرسل /done\n"
-            "_أو أرسل /clear لمسح كل الملصقات_",
+            "📷 *صورة الحظر* (تظهر من المرة الخامسة فصاعداً مع رسالة الحظر لمدة ساعة)\n\n"
+            + ("يوجد صورة محفوظة حالياً.\n\n" if has_photo else "لا توجد صورة بعد.\n\n")
+            + "أرسل الصورة الجديدة الآن:",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🗑 مسح الكل", callback_data="st_notif_stickers_clear"),
-                InlineKeyboardButton("❌ إلغاء",    callback_data="st_notif1"),
+                InlineKeyboardButton("🗑 مسح الصورة", callback_data="st_notif_block_photo_clear"),
+                InlineKeyboardButton("❌ إلغاء",       callback_data="st_notif1"),
             ]])
         )
         return
 
-    if d == "st_notif_stickers_clear":
-        set_setting("notif_decline_stickers", "")
+    if d == "st_notif_block_photo_clear":
+        set_setting("notif_block_photo", "")
         ctx.user_data.pop("state", None)
-        await q.edit_message_text("✅ تم مسح ملصقات الرفض.", parse_mode="Markdown",
+        await q.edit_message_text("✅ تم مسح صورة الحظر.", parse_mode="Markdown",
                                   reply_markup=kb_notif1_settings())
         return
 
-    if d == "st_notif_dec_texts":
-        ctx.user_data["state"] = "wait_notif_dec_texts"
-        cur = get_setting("notif_decline_texts", "")
-        lines = [t for t in cur.split("\n") if t.strip()]
-        cur_preview = f"\n\nالنصوص الحالية ({len(lines)}):\n" + "\n".join(f"• {l}" for l in lines[:5]) if lines else "\n\nلا توجد نصوص بعد."
+    if d == "st_notif_block_text":
+        ctx.user_data["state"] = "wait_notif_block_text"
+        cur = get_setting("notif_block_text", "مزاعلين ما ارسلك اي ملف لمدة ساعة 🙂")
         await q.edit_message_text(
-            f"💬 *نصوص الرفض* (تظهر من المرة السادسة فصاعداً){cur_preview}\n\n"
-            "أرسل النصوص كل نص في سطر منفصل، وعند الانتهاء أرسل /done\n"
-            "_أو أرسل /clear لمسح كل النصوص_",
+            f"💬 *نص رسالة الحظر*\n\nالنص الحالي:\n`{cur}`\n\n"
+            "أرسل النص الجديد (يمكن استخدام إيموجي):",
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup([[
-                InlineKeyboardButton("🗑 مسح الكل", callback_data="st_notif_dec_texts_clear"),
-                InlineKeyboardButton("❌ إلغاء",    callback_data="st_notif1"),
-            ]])
+            reply_markup=kb_cancel_inline()
         )
-        return
-
-    if d == "st_notif_dec_texts_clear":
-        set_setting("notif_decline_texts", "")
-        ctx.user_data.pop("state", None)
-        await q.edit_message_text("✅ تم مسح نصوص الرفض.", parse_mode="Markdown",
-                                  reply_markup=kb_notif1_settings())
         return
 
     if d == "st_notif_opens":

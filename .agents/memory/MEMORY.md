@@ -1,0 +1,1 @@
+- [Telegram bot decline-escalation flow](telegram-decline-escalation.md) — how the "اشتراك إجباري" 5-stage decline ladder is wired across callback_handlers/features/content_delivery; read before touching notif_* logic.

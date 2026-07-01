@@ -270,6 +270,16 @@ async def deliver_denied_content(bot, chat_id, bid_str):
 # ── عرض عناصر المحتوى للمستخدم ───────────────────────────────────
 async def send_items(m, bid, uid=None, bot=None):
     if uid and not is_admin(uid):
+        # حظر مؤقت بعد التمادي في رفض الاشتراك
+        remaining = get_file_block_remaining(uid)
+        if remaining > 0:
+            mins = max(1, (remaining + 59) // 60)
+            try:
+                await m.reply_text(f"⏳ مزاعلين، ما زلت محظوراً عن استلام الملفات لمدة {mins} دقيقة تقريباً.")
+            except Exception:
+                pass
+            return
+
         # النظام 1: هل هناك تنبيه منبثق معلق؟
         pending_bid = get_pending_notif(uid)
         if pending_bid:

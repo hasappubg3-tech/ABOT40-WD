@@ -273,6 +273,8 @@ def should_notify(uid) -> bool:
         return False
     if get_setting("notif_enabled", "1") != "1":
         return False
+    if consume_force_next_notif(uid):
+        return True
     s = get_user_stats(uid)
     opens = s.get("opens", 0)
     last_op = s.get("last_notif_opens", 0)
@@ -283,6 +285,54 @@ def should_notify(uid) -> bool:
     if every_opens > 0 and opens > 0 and (opens - last_op) >= every_opens:
         return True
     return False
+
+# ── عداد الرفض المتسلسل (يُحفظ بشكل دائم لكل مستخدم) ──────────────
+def get_notif_no_count(uid) -> int:
+    s = get_user_stats(uid)
+    return s.get("notif_no_count", 0) or 0
+
+def set_notif_no_count(uid, val: int):
+    _ensure_user_stats(uid)
+    _col("user_stats").update_one({"user_id": uid}, {"$set": {"notif_no_count": val}})
+
+def inc_notif_no_count(uid) -> int:
+    _ensure_user_stats(uid)
+    result = _col("user_stats").find_one_and_update(
+        {"user_id": uid}, {"$inc": {"notif_no_count": 1}}, return_document=True
+    )
+    return result.get("notif_no_count", 0) if result else 0
+
+def reset_notif_no_count(uid):
+    set_notif_no_count(uid, 0)
+
+# ── إجبار ظهور رسالة الاشتراك في أول محاولة قادمة (يتجاوز عداد الفتحات) ──
+def set_force_next_notif(uid, val: bool = True):
+    _ensure_user_stats(uid)
+    _col("user_stats").update_one({"user_id": uid}, {"$set": {"notif_force_next": 1 if val else 0}})
+
+def consume_force_next_notif(uid) -> bool:
+    s = get_user_stats(uid)
+    if s.get("notif_force_next"):
+        set_force_next_notif(uid, False)
+        return True
+    return False
+
+# ── حظر استلام الملفات لفترة زمنية (مثلاً ساعة كاملة) ───────────────
+def block_user_files(uid, seconds: int = 3600) -> int:
+    _ensure_user_stats(uid)
+    until = int(_time.time()) + seconds
+    _col("user_stats").update_one({"user_id": uid}, {"$set": {"file_block_until": until}})
+    return until
+
+def clear_file_block(uid):
+    _ensure_user_stats(uid)
+    _col("user_stats").update_one({"user_id": uid}, {"$set": {"file_block_until": 0}})
+
+def get_file_block_remaining(uid) -> int:
+    s = get_user_stats(uid)
+    until = s.get("file_block_until", 0) or 0
+    remaining = until - int(_time.time())
+    return remaining if remaining > 0 else 0
 
 async def send_notif_gate(target, uid, bid):
     msg         = get_setting("notif_message", "🔔 يرجى الاشتراك في قناتنا!")
