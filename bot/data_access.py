@@ -357,6 +357,23 @@ def set_btn_unified_rating(bid, val=1):
 def set_btn_hidden(bid, val=1):
     _col("buttons").update_one({"id": bid}, {"$set": {"hidden": 1 if val else 0}})
 
+def toggle_btn_maintenance(bid) -> bool:
+    b = get_btn(bid)
+    if not b:
+        return False
+    new_val = 0 if (b.get("maintenance", 0) or 0) else 1
+    _col("buttons").update_one({"id": bid}, {"$set": {"maintenance": new_val}})
+    return bool(new_val)
+
+def set_btn_maintenance_msg(bid, msg: str):
+    _col("buttons").update_one({"id": bid}, {"$set": {"maintenance_msg": msg}})
+
+def get_btn_maintenance_msg(bid) -> str:
+    b = get_btn(bid)
+    if not b:
+        return ""
+    return b.get("maintenance_msg") or ""
+
 def set_btn_no_caption(bid, val=1):
     _col("buttons").update_one({"id": bid}, {"$set": {"no_caption": 1 if val else 0}})
 

@@ -1108,6 +1108,26 @@ async def on_message(update: Update, ctx):
                            reply_markup=build_kb(uid, pid))
         return
 
+    # ── انتظار رسالة الصيانة لزر معين ───────────────────────────
+    if state and state.startswith("wait_maintenance_msg_"):
+        if not m.text or not m.text.strip():
+            await m.reply_text("⚠️ أرسل نصاً صحيحاً لرسالة الصيانة."); return
+        bid = int(state[len("wait_maintenance_msg_"):])
+        ctx.user_data.pop("state", None)
+        set_btn_maintenance_msg(bid, m.text.strip())
+        b = get_btn(bid)
+        t = b.get("type", "") if b else ""
+        if t == "content":
+            await set_panel(ctx, chat_id, f"{btn_id_header(bid)}📄 *{b['label']}*", kb_content_quick(bid))
+        elif t == "menu":
+            await set_panel(ctx, chat_id, f"{btn_id_header(bid)}📂 *{b['label']}*", kb_menu_quick(bid))
+        elif t == "quiz":
+            await set_panel(ctx, chat_id, f"{btn_id_header(bid)}📊 *{b['label']}*", kb_quiz_quick(bid))
+        elif t == "exam":
+            await set_panel(ctx, chat_id, f"{btn_id_header(bid)}📝 *{b['label']}*", kb_exam_quick(bid))
+        await m.reply_text("✅ تم حفظ رسالة الصيانة.", reply_markup=build_kb(uid, pid))
+        return
+
     # ── انتظار قيمة طلبات AI المتزامنة ──────────────────────────
     if state == "wait_ai_queue_concurrency":
         if not m.text or not m.text.strip().isdigit():
@@ -2122,6 +2142,13 @@ async def on_message(update: Update, ctx):
         return
 
     b = matched
+
+    # ── فحص وضع الصيانة (للمستخدم فقط) ──────────────────────────
+    if not is_admin(uid) and (b.get("maintenance", 0) or 0):
+        msg = get_btn_maintenance_msg(b["id"]) or "🔧 هذا القسم تحت الصيانة حالياً، يرجى المحاولة لاحقاً."
+        await m.reply_text(msg)
+        return
+
     if b["type"] == "menu":
         ctx.user_data["pid"] = b["id"]
         await m.reply_text(".", reply_markup=build_kb(uid, b["id"]))

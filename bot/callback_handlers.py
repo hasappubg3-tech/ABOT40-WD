@@ -1861,6 +1861,45 @@ async def cb_manage(update: Update, ctx):
         return
 
     # ── تبديل إخفاء/إظهار أي زر ─────────────────────────────────
+    if d.startswith("btn_toggle_maintenance_"):
+        bid = int(d[len("btn_toggle_maintenance_"):])
+        b = get_btn(bid)
+        if not b:
+            return
+        is_on = toggle_btn_maintenance(bid)
+        b = get_btn(bid)
+        status = "🔧 وضع الصيانة مفعّل الآن — المستخدمون لن يتمكنوا من فتح هذا الزر." if is_on else "✅ وضع الصيانة مُلغى — الزر يعمل بشكل طبيعي."
+        t = b.get("type", "")
+        if t == "content":
+            items = get_items(bid)
+            await q.edit_message_text(f"{btn_id_header(bid)}📄 *{b['label']}*\n_{len(items)} عنصر_\n\n{status}", parse_mode="Markdown", reply_markup=kb_content_quick(bid))
+        elif t == "menu":
+            await q.edit_message_text(f"{btn_id_header(bid)}📂 *{b['label']}*\n\n{status}", parse_mode="Markdown", reply_markup=kb_menu_quick(bid))
+        elif t == "quiz":
+            await q.edit_message_text(f"{btn_id_header(bid)}📊 *{b['label']}*\n\n{status}", parse_mode="Markdown", reply_markup=kb_quiz_quick(bid))
+        elif t == "exam":
+            await q.edit_message_text(f"{btn_id_header(bid)}📝 *{b['label']}*\n\n{status}", parse_mode="Markdown", reply_markup=kb_exam_quick(bid))
+        else:
+            await q.edit_message_text(f"{btn_id_header(bid)}⭐ *{b['label']}*\n\n{status}", parse_mode="Markdown", reply_markup=kb_menu_quick(bid))
+        return
+
+    if d.startswith("btn_set_maintenance_msg_"):
+        bid = int(d[len("btn_set_maintenance_msg_"):])
+        b = get_btn(bid)
+        if not b:
+            return
+        current_msg = get_btn_maintenance_msg(bid)
+        ctx.user_data["state"] = f"wait_maintenance_msg_{bid}"
+        hint = f"\n\n_الرسالة الحالية:_\n{current_msg}" if current_msg else ""
+        await q.edit_message_text(
+            f"✏️ *رسالة الصيانة للزر:* `{b['label']}`{hint}\n\n"
+            "أرسل نص الرسالة التي ستظهر للمستخدم عند ضغطه الزر أثناء الصيانة.\n\n"
+            "_مثال: 🔧 هذا القسم تحت الصيانة، سيعود قريباً._",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("إلغاء", callback_data=f"e_{bid}")]])
+        )
+        return
+
     if d.startswith("btn_toggle_hide_"):
         bid = int(d[len("btn_toggle_hide_"):])
         b = get_btn(bid)
