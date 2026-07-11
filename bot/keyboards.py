@@ -84,7 +84,8 @@ def _quiz_status_label(label: str, bid: int, uid: int) -> str:
 
 def build_kb(uid, pid=None):
     btns = get_buttons(pid)
-    admin = is_admin(uid)
+    real_admin = is_real_admin(uid)
+    admin = is_admin(uid)  # False تلقائياً أثناء وضع (معاينة كمستخدم)
     if not admin:
         btns = [b for b in btns if _btn_visible_for_user(b)]
     parent_b = get_btn(pid) if pid is not None else None
@@ -132,7 +133,9 @@ def build_kb(uid, pid=None):
         rows.append([KeyboardButton(BTN_BACK), KeyboardButton(BTN_HOME)])
     if admin:
         rows.append([KeyboardButton(BTN_SETTINGS)])
-    return ReplyKeyboardMarkup(rows, resize_keyboard=True) if (rows or admin) else None
+    if real_admin:
+        rows.append([KeyboardButton(BTN_PREVIEW)])
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True) if (rows or admin or real_admin) else None
 
 def is_bot_button_text(text: str, pid=None) -> bool:
     if not text:

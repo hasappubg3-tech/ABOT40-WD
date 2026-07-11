@@ -59,8 +59,9 @@ BTN_EXAM_STATS = "📊 إحصائيات الامتحانات"
 
 ADMIN_BTNS   = {BTN_ADMINS}
 BTN_PLUS = "➕"
+BTN_PREVIEW = "🕵️ معاينة كمستخدم"
 SPECIAL_BTNS = {BTN_BACK, BTN_HOME, BTN_ADD, BTN_MANAGE, BTN_ADMINS, BTN_CANCEL, BTN_SWAP, BTN_PLUS,
-                BTN_SETTINGS, "📂 قائمة", "📄 محتوى", BTN_EXAM_STATS}
+                BTN_SETTINGS, "📂 قائمة", "📄 محتوى", BTN_EXAM_STATS, BTN_PREVIEW}
 
 _SUP_DIGITS = "⁰¹²³⁴⁵⁶⁷⁸⁹"
 _SUP_MAP    = {c: str(i) for i, c in enumerate(_SUP_DIGITS)}

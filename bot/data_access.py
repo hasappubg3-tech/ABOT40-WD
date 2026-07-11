@@ -62,8 +62,28 @@ def init_db():
     logging.info("MongoDB: تم تهيئة الفهارس.")
 
 # ── المشرفون ──────────────────────────────────────────────────────
-def is_admin(uid):
+def is_real_admin(uid):
+    """هل هذا المستخدم مشرف فعلياً بغض النظر عن وضع المعاينة؟"""
     return _col("admins").find_one({"id": uid}) is not None
+
+def is_preview_mode(uid):
+    """هل المشرف حالياً في وضع (معاينة كمستخدم)؟"""
+    doc = _col("admins").find_one({"id": uid})
+    return bool(doc and doc.get("preview_mode"))
+
+def set_preview_mode(uid, value: bool):
+    _col("admins").update_one({"id": uid}, {"$set": {"preview_mode": bool(value)}})
+
+def toggle_preview_mode(uid) -> bool:
+    """يبدّل وضع المعاينة ويُرجع الحالة الجديدة."""
+    new_val = not is_preview_mode(uid)
+    set_preview_mode(uid, new_val)
+    return new_val
+
+def is_admin(uid):
+    """المشرف الفعّال — يُصبح False أثناء وضع (معاينة كمستخدم) بحيث تختفي
+    كل أزرار وميزات المشرف في كل أنحاء البوت تلقائياً."""
+    return is_real_admin(uid) and not is_preview_mode(uid)
 
 def add_admin(uid, name=None):
     _col("admins").update_one({"id": uid}, {"$set": {"id": uid, "username": name}}, upsert=True)
