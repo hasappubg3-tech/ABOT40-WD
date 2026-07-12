@@ -2043,12 +2043,11 @@ async def on_message(update: Update, ctx):
     # ── معاينة كمستخدم عادي (للمشرفين فقط) ─────────────────────────
     if text == BTN_PREVIEW and is_real_admin(uid):
         new_state = toggle_preview_mode(uid)
-        ctx.user_data["pid"] = None
         if new_state:
             msg = "👁 تم تفعيل وضع (معاينة كمستخدم). البوت يظهر لك الآن كما يظهر لمستخدم عادي.\nاضغط الزر نفسه مجدداً للعودة إلى وضع المشرف."
         else:
             msg = "✅ تم إلغاء وضع المعاينة، رجعت لوضع المشرف."
-        await m.reply_text(msg, reply_markup=build_kb(uid, None))
+        await m.reply_text(msg, reply_markup=build_kb(uid, pid))
         return
 
     # ── القائمة الرئيسية ──────────────────────────────────────────
