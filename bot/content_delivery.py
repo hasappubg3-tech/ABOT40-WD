@@ -1,4 +1,5 @@
 from .shared import *
+import html as _html
 from telegram import InputMediaPhoto, InputMediaVideo, InputMediaDocument
 
 def detect_content(m):
@@ -143,7 +144,14 @@ async def send_file_item(target, item, reply_markup=None, extra_caption="", bot=
         return msg
 
     if t == "text":
-        return await target.reply_text(cap, **({"reply_markup": reply_markup} if reply_markup else {}))
+        bold_cap = f"<b>{_html.escape(cap)}</b>" if cap else cap
+        try:
+            return await target.reply_text(
+                bold_cap, parse_mode="HTML",
+                **({"reply_markup": reply_markup} if reply_markup else {})
+            )
+        except Exception:
+            return await target.reply_text(cap, **({"reply_markup": reply_markup} if reply_markup else {}))
 
     # أولوية 1: الإرسال من قناة التخزين (الأسرع والأكثر موثوقية)
     if channel_msg_id and get_storage_channel_id():
@@ -170,15 +178,18 @@ async def send_file_item(target, item, reply_markup=None, extra_caption="", bot=
     return None
 
 def _group_items(items):
-    """تجمّع العناصر المتتالية التي تشترك في نفس group_id في قوائم فرعية."""
+    """تجمّع العناصر المتتالية التي تشترك في نفس group_id في قوائم فرعية.
+    الملفات (type=file) لا تُدرج في الألبوم أبداً — تُرسل دائماً بشكل فردي."""
     groups = []
     i = 0
     while i < len(items):
         gid = items[i].get("group_id")
-        if gid is not None:
+        item_type = items[i].get("type")
+        # الملفات لا تُجمَّع مع غيرها في ألبوم
+        if gid is not None and item_type != "file":
             group = [items[i]]
             j = i + 1
-            while j < len(items) and items[j].get("group_id") == gid:
+            while j < len(items) and items[j].get("group_id") == gid and items[j].get("type") != "file":
                 group.append(items[j])
                 j += 1
             groups.append(group)
