@@ -2984,8 +2984,18 @@ async def cb_manage(update: Update, ctx):
         bid = int(d[8:]); items = get_items(bid)
         if not items:
             return
-        for item in items:
-            await send_file_item(q.message, item, reply_markup=kb_item_actions(item["id"]), bot=ctx.bot)
+        for group in _group_items(items):
+            if len(group) > 1:
+                # إرسال المجموعة كألبوم — أزرار الإدارة تظهر للعنصر الأول فقط
+                await send_media_group_items(ctx.bot, q.message.chat_id, group)
+                await q.message.reply_text(
+                    f"⬆️ مجموعة ({len(group)} عناصر)",
+                    reply_markup=kb_item_actions(group[0]["id"])
+                )
+            else:
+                await send_file_item(q.message, group[0],
+                                     reply_markup=kb_item_actions(group[0]["id"]),
+                                     bot=ctx.bot)
         return
 
     # ── تغيير وصف عنصر ───────────────────────────────────────────

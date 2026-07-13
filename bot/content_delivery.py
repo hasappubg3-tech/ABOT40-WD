@@ -213,10 +213,15 @@ async def send_media_group_items(bot, chat_id, items, extra_caption="", reply_ma
     except Exception as e:
         logging.warning(f"[MG] send_media_group فشل: {e}")
         return []
-    # media_group لا تدعم reply_markup — نُرسل الأزرار كرسالة منفصلة
-    if reply_markup and msgs:
+    # media_group لا تدعم reply_markup — نُرسل الأزرار مع extra_caption كرسالة منفصلة
+    # فقط إذا كان هناك نص (extra_caption) يستحق العرض
+    if msgs and extra_caption and extra_caption.strip():
         try:
-            await bot.send_message(chat_id=chat_id, text="📎", reply_markup=reply_markup)
+            await bot.send_message(
+                chat_id=chat_id,
+                text=extra_caption.strip(),
+                reply_markup=reply_markup,
+            )
         except Exception:
             pass
     return msgs or []
