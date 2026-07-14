@@ -4,22 +4,47 @@ import re as _re
 from telegram import InputMediaPhoto, InputMediaVideo, InputMediaDocument
 
 def resolve_emoji_aliases(text: str) -> str:
-    """يستبدل رموز :اسم: بـ custom emoji HTML tags للعرض بالنصوص."""
-    if not text or ':' not in text:
+    """يستبدل رموز :اسم: وأحرف الإيموجي المتحركة بـ custom emoji HTML tags."""
+    if not text:
         return text
     try:
-        aliases = {a['alias']: a for a in get_all_emoji_aliases()}
+        all_aliases = get_all_emoji_aliases()
     except Exception:
         return text
-    if not aliases:
+    if not all_aliases:
         return text
-    def _replace(m):
-        doc = aliases.get(m.group(1))
-        if not doc:
-            return m.group(0)
-        fb = _html.escape(doc['fallback'])
-        return f'<tg-emoji emoji-id="{doc["emoji_id"]}">{fb}</tg-emoji>'
-    return _re.sub(r':([^:\s:]+):', _replace, text)
+
+    # المرور الأول: استبدال :اسم: (الرموز المسماة يدوياً)
+    named = {a['alias']: a for a in all_aliases if a['alias'] != a.get('fallback', '')}
+    if named and ':' in text:
+        def _replace_named(m):
+            doc = named.get(m.group(1))
+            if not doc:
+                return m.group(0)
+            fb = _html.escape(doc['fallback'])
+            return f'<tg-emoji emoji-id="{doc["emoji_id"]}">{fb}</tg-emoji>'
+        text = _re.sub(r':([^:\s:]+):', _replace_named, text)
+
+    # المرور الثاني: استبدال حرف الإيموجي مباشرة (محفوظ تلقائياً)
+    auto = {a['alias']: a for a in all_aliases if a['alias'] == a.get('fallback', '')}
+    if auto:
+        # نقسّم على وسوم HTML لتجنب استبدال ما بداخلها
+        tag_pat = _re.compile(r'(<[^>]+>)')
+        parts = tag_pat.split(text)
+        out = []
+        for part in parts:
+            if part.startswith('<') and part.endswith('>'):
+                out.append(part)
+            else:
+                for fb_char, doc in auto.items():
+                    if fb_char in part:
+                        fb_esc = _html.escape(fb_char)
+                        tag = f'<tg-emoji emoji-id="{doc["emoji_id"]}">{fb_esc}</tg-emoji>'
+                        part = part.replace(fb_char, tag)
+                out.append(part)
+        text = ''.join(out)
+
+    return text
 
 def detect_content(m):
     if m.photo:

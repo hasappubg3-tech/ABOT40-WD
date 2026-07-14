@@ -339,34 +339,23 @@ async def on_message(update: Update, ctx):
     if not is_admin(uid) and not check_rate_limit(uid, 'msg'):
         return
 
-    # ── كشف إيموجي متحرك تلقائياً (للمشرفين فقط، بدون حالة نشطة) ──
-    if is_admin(uid) and not state:
-        all_entities = list(m.entities or []) + list(m.caption_entities or [])
-        custom_emoji_ents = [e for e in all_entities
-                             if e.type == MessageEntity.CUSTOM_EMOJI and e.custom_emoji_id]
-        if custom_emoji_ents:
-            source_text = m.text or m.caption or ""
-            seen_ids: set = set()
-            pending = []
-            for e in custom_emoji_ents:
-                eid = e.custom_emoji_id
-                if eid not in seen_ids:
-                    seen_ids.add(eid)
-                    fallback = source_text[e.offset:e.offset + e.length] if source_text else "\u2b50"
-                    pending.append({"emoji_id": eid, "fallback": fallback})
-            if pending:
-                ctx.user_data["state"] = "wait_emoji_alias"
-                ctx.user_data["pending_emoji"] = pending[0]
-                ctx.user_data["pending_emoji_queue"] = pending[1:]
-                count = len(pending)
-                await m.reply_text(
-                    f"\U0001f3a8 تم اكتشاف *{count}* إيموجي متحرك!\n\n"
-                    "أرسل الرمز الذي تريد استخدامه في النصوص\n"
-                    "مثال: `:نجمة:` أو `:fire:` أو أي اسم بين نقطتين\n\n"
-                    "أو أرسل `تجاهل` للتخطي.",
-                    parse_mode="Markdown"
-                )
-                return
+    # ── حفظ إيموجي متحرك تلقائياً (للمشرفين — في أي حالة، بصمت) ──
+    if is_admin(uid):
+        _all_ents = list(m.entities or []) + list(m.caption_entities or [])
+        _custom = [e for e in _all_ents
+                   if e.type == MessageEntity.CUSTOM_EMOJI and e.custom_emoji_id]
+        if _custom:
+            _src = m.text or m.caption or ""
+            _seen: set = set()
+            for _e in _custom:
+                _eid = _e.custom_emoji_id
+                if _eid not in _seen:
+                    _seen.add(_eid)
+                    _fb = _src[_e.offset:_e.offset + _e.length] if _src else "⭐"
+                    try:
+                        save_emoji_alias(_fb, _eid, _fb, uid)
+                    except Exception:
+                        pass
 
     # ── وضع محادثة AI للسادس العلمي ──────────────────────────────
     if state == "ai_chat_mode":
