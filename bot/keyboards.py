@@ -83,9 +83,9 @@ def _btn_visible_for_user(b):
     """هل يُعرض هذا الزر للمستخدم العادي؟ لا إذا كان مخفياً يدوياً أو فارغاً تلقائياً."""
     if b.get("hidden", 0):
         return False
-    if b["type"] == "content" and not get_items(b["id"]):
+    if b["type"] == "content" and not _has_items_user(b["id"]):
         return False
-    if b["type"] == "compound" and not get_buttons(b["id"]):
+    if b["type"] == "compound" and not _has_buttons_user(b["id"]):
         return False
     return True
 

@@ -1442,6 +1442,22 @@ def get_items_user(bid):
     docs = _col(col).find({"button_id": bid}).sort([("ord", 1), ("id", 1)])
     return [_d(r) for r in docs]
 
+def get_btn_by_label_user(label):
+    """يبحث عن زر بواسطة الاسم — من الـ snapshot إذا كان وضع العمل مفعّلاً."""
+    col = "buttons_snapshot" if get_work_mode() else "buttons"
+    doc = _col(col).find_one({"label": label, "deleted": {"$ne": 1}})
+    return _d(doc)
+
+def _has_items_user(bid) -> bool:
+    """يتحقق إذا كان الزر عنده محتوى — من الـ snapshot إذا كان وضع العمل مفعّلاً."""
+    col = "content_items_snapshot" if get_work_mode() else "content_items"
+    return _col(col).count_documents({"button_id": bid}) > 0
+
+def _has_buttons_user(pid) -> bool:
+    """يتحقق إذا كان للزر أولاد — من الـ snapshot إذا كان وضع العمل مفعّلاً."""
+    col = "buttons_snapshot" if get_work_mode() else "buttons"
+    return _col(col).count_documents({"parent_id": pid, "deleted": {"$ne": 1}}) > 0
+
 # ── إحصائيات المستخدمين ──────────────────────────────────────────
 def update_user_info(uid, username=None, first_name=None):
     upd = {}

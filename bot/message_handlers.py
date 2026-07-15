@@ -2440,12 +2440,15 @@ async def on_message(update: Update, ctx):
             ctx.user_data["pid"] = matched.get("parent_id")
 
     if not matched:
-        btns = get_buttons(pid)
+        btns = get_buttons_user(pid) if not is_admin(uid) else get_buttons(pid)
         matched = next((b for b in btns if b['label'] in (text, _clean)), None)
     if not matched:
         if pid is None:
             # البوت أُعيد تشغيله وضاع pid → نبحث عالمياً فقط من الجذر
-            matched = get_btn_by_label(text) or get_btn_by_label(_clean)
+            if is_admin(uid):
+                matched = get_btn_by_label(text) or get_btn_by_label(_clean)
+            else:
+                matched = get_btn_by_label_user(text) or get_btn_by_label_user(_clean)
             if matched:
                 ctx.user_data["pid"] = matched.get("parent_id")
     if not matched:
@@ -2559,7 +2562,7 @@ async def on_message(update: Update, ctx):
                             f"{btn_id_header(b['id'])}🧩 *{b['label']}*\n_{len(children)} زر داخلي_",
                             kb_compound_quick(b["id"]))
         else:
-            children = get_buttons(b["id"])
+            children = get_buttons_user(b["id"])
             # زر مدمج بمحتوى واحد فقط → عرض المحتوى مباشرة بدون قائمة اختيار
             if len(children) == 1 and children[0].get("type") == "content":
                 await send_items(m, children[0]["id"], uid=uid, bot=ctx.bot)
