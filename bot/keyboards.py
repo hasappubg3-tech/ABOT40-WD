@@ -61,15 +61,18 @@ def _inline_btn(label: str, label_emojis, **kwargs) -> InlineKeyboardButton:
         # زر قديم بدون label_emojis → استخدم القاموس العام
         _eid = _kb_emoji_id(label)
         if _eid:
-            # أبقِ الفالباك في النص حتى يُبدّله تيليغرام بالمخصص
-            return InlineKeyboardButton(label, api_kwargs={"icon_custom_emoji_id": _eid}, **kwargs)
+            display = _strip_known_emojis(label)
+            return InlineKeyboardButton(display, api_kwargs={"icon_custom_emoji_id": _eid}, **kwargs)
         return InlineKeyboardButton(label, **kwargs)
 
     if label_emojis:
-        # إيموجيات مخصصة محددة لهذا الزر
+        # إيموجيات مخصصة محددة لهذا الزر — احذف الفالباك من النص
         _eid = next(iter(label_emojis.values()))
-        # أبقِ الفالباك في النص + مرر الـ id
-        return InlineKeyboardButton(label, api_kwargs={"icon_custom_emoji_id": _eid}, **kwargs)
+        display = label
+        for _ch in label_emojis:
+            display = display.replace(_ch, "")
+        display = display.strip()
+        return InlineKeyboardButton(display, api_kwargs={"icon_custom_emoji_id": _eid}, **kwargs)
 
     # label_emojis == {} → إيموجي عادي فقط
     return InlineKeyboardButton(label, **kwargs)
