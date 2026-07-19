@@ -2567,12 +2567,6 @@ async def on_message(update: Update, ctx):
 
     b = matched
 
-    # ── زر حاسبة القبول الجامعي ───────────────────────────────────
-    if not is_admin(uid) and b["id"] == 9670:
-        from bot.qaboolat_feature import handle_qaboolat_trigger
-        await handle_qaboolat_trigger(m, ctx, uid)
-        return
-
     # ── فحص وضع الصيانة (للمستخدم فقط) ──────────────────────────
     if not is_admin(uid) and (b.get("maintenance", 0) or 0):
         msg = get_btn_maintenance_msg(b["id"]) or "🔧 هذا القسم تحت الصيانة حالياً، يرجى المحاولة لاحقاً."
@@ -2823,6 +2817,14 @@ async def on_message(update: Update, ctx):
                         InlineKeyboardButton("❌ إلغاء",       callback_data="gc_cancel"),
                     ]])
                 )
+        elif action == "qaboolat":
+            if is_admin(uid):
+                await set_panel(ctx, chat_id,
+                                f"{btn_id_header(b['id'])}⭐ *{b['label']}*\n_زر حاسبة القبول الجامعي_",
+                                kb_special_quick(b["id"]))
+            else:
+                from bot.qaboolat_feature import handle_qaboolat_trigger
+                await handle_qaboolat_trigger(m, ctx, uid)
         else:
             if is_admin(uid):
                 await set_panel(ctx, chat_id,

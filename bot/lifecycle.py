@@ -31,6 +31,16 @@ def _setup_ai_chat_feature():
         )
         logging.info("تم تعيين special_action=ai_chat للزر #8617.")
 
+def _setup_qaboolat_feature():
+    mdb = get_mongo_db()
+    b = mdb["buttons"].find_one({"id": 9670})
+    if b:
+        mdb["buttons"].update_one(
+            {"id": 9670},
+            {"$set": {"special_action": "qaboolat", "hidden": 0}}
+        )
+        logging.info("تم تعيين special_action=qaboolat للزر #9670.")
+
 async def _cd_auto_update_job(ctx):
     if not _CD_WATCH:
         return
@@ -75,6 +85,7 @@ async def post_init(app):
     _setup_countdown_feature()
     _setup_ai_chat_feature()
     logging.info("تم إعداد ميزة محادثة AI للسادس العلمي.")
+    _setup_qaboolat_feature()
     app.job_queue.run_repeating(
         _cd_auto_update_job,
         interval=60,
