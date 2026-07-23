@@ -56,20 +56,17 @@ body {
   transition: background var(--transition), color var(--transition);
 }
 
-/* خلفية رخامية مائلة */
+/* خلفية رخامية — صورة حقيقية */
 body::before {
   content: '';
   position: fixed;
-  top: -30%;
-  left: -30%;
-  width: 160%;
-  height: 160%;
-  background: url('/static/img/marble-bg.svg') center / cover;
-  transform: rotate(25deg);
+  inset: 0;
+  background: url('/static/img/marble1.jpg') center / cover no-repeat;
+  opacity: 0.55;
   pointer-events: none;
   z-index: 0;
 }
-[data-theme="dark"] body::before { opacity: 0.15; }
+[data-theme="dark"] body::before { opacity: 0.08; }
 
 body > * { position: relative; z-index: 1; }
 
